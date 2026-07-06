@@ -69,6 +69,9 @@
     },
     {
       "capacity_stacks_add": 1,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 100 }]
+    },
+    {
       "cadence_multiplier": 0.20,
       "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 100 }]
     }

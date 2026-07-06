@@ -20,6 +20,7 @@ import org.dawnoftime.onceuponatown.network.C2SAdvanceEraPacket;
 import org.dawnoftime.onceuponatown.network.C2SBuyPacket;
 import org.dawnoftime.onceuponatown.network.C2SDepositPacket;
 import org.dawnoftime.onceuponatown.network.C2SContributeQuestPacket;
+import org.dawnoftime.onceuponatown.network.C2SVerifyClearancePacket;
 import org.dawnoftime.onceuponatown.network.C2SQueueBuildingPacket;
 import org.dawnoftime.onceuponatown.network.C2SRemoveQueuedBuildingPacket;
 import org.dawnoftime.onceuponatown.network.C2SRequestStockPacket;
@@ -124,6 +125,11 @@ public class OuatFabricClient implements ClientModInitializer {
             var buf = PacketByteBufs.create();
             new C2SContributeQuestPacket(pos, questId).encode(buf);
             ClientPlayNetworking.send(C2SContributeQuestPacket.ID, buf);
+        };
+        NetworkHelper.sendVerifyClearancePacket = (pos, questId) -> {
+            var buf = PacketByteBufs.create();
+            new C2SVerifyClearancePacket(pos, questId).encode(buf);
+            ClientPlayNetworking.send(C2SVerifyClearancePacket.ID, buf);
         };
         NetworkHelper.sendBuyPacket = (pos, items) -> {
             var buf = PacketByteBufs.create();

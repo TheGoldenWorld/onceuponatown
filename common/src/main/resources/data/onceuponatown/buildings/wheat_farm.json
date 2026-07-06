@@ -8,7 +8,7 @@
 
   "required_buildings": [
     { "defId": "wild_crops", "count": 2 },
-    { "defId": "wheat_field", "count": 2 }
+    { "defId": "wheat_field", "count": 3 }
   ],
   "construction_cost": [
     {

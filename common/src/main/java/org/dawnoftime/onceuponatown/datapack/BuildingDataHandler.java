@@ -187,6 +187,13 @@ public class BuildingDataHandler {
             ? json.get("consumption_per_herd").getAsFloat() : 0f;
         int weight = json.has("weight") ? json.get("weight").getAsInt() : 1;
 
+        List<String> obstacleBlocks = new ArrayList<>();
+        if (json.has("obstacle_blocks")) {
+            for (JsonElement el : json.getAsJsonArray("obstacle_blocks")) {
+                obstacleBlocks.add(el.getAsString());
+            }
+        }
+
         List<ItemCost> initialStock = new ArrayList<>();
         if (json.has("initial_stock")) {
             for (JsonElement el : json.getAsJsonArray("initial_stock")) {
@@ -200,7 +207,7 @@ public class BuildingDataHandler {
             transformations, transformInputRatio, transformEveryTicks,
             productionBonus, stockBonus, residents, upgrades, nbtLevels,
             requiredResidents, requiredBuildings, consumptionPerResident, initialStock,
-            herd, consumptionPerHerd, weight);
+            herd, consumptionPerHerd, weight, obstacleBlocks);
     }
 
     // Builds the NBT payload sent to the client on player join (upgrade info only).

@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.FenceBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
@@ -27,6 +28,9 @@ public class OuatWalkNodeEvaluator extends WalkNodeEvaluator {
             return BlockPathTypes.WALKABLE;
         }
         if (state.getBlock() instanceof FenceBlock) {
+            return BlockPathTypes.BLOCKED;
+        }
+        if (state.getBlock() instanceof TrapDoorBlock) {
             return BlockPathTypes.BLOCKED;
         }
         BlockState below = level.getBlockState(new BlockPos(x, y - 1, z));

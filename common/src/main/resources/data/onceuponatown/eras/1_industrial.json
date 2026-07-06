@@ -5,7 +5,6 @@
   "structure_label": "Settlement",
   "icon_item": "minecraft:cobblestone",
 
-  "min_weight_percent": 90,
   "weight_cap_increase": 10,
   "resource_cost": [
     { "item": "minecraft:oak_log", "amount": 20 }
@@ -16,6 +15,6 @@
     { "defId": "workshop", "count": 1 }
 
   ],
-  "unlocked_building_ids": ["sheep_field", "lumberjack", "stone_breach", "wild_spot"],
+  "unlocked_building_ids": ["sheep_field", "stone_breach", "lumberjack", "wild_spot"],
   "auto_upgrade_ids": ["settlement"]
 }

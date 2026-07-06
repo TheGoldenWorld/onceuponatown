@@ -86,7 +86,6 @@ public class EraTransitionDataHandler {
         String fromOrientation = json.has("from_orientation") ? json.get("from_orientation").getAsString() : "";
         String orientationLabel = json.has("orientation_label") ? json.get("orientation_label").getAsString() : id;
         String iconItem = json.has("icon_item") ? json.get("icon_item").getAsString() : "minecraft:dirt";
-        int minWeightPercent = json.has("min_weight_percent") ? json.get("min_weight_percent").getAsInt() : 0;
         String nextOrientation = json.has("next_orientation") ? json.get("next_orientation").getAsString() : "";
         int weightCapIncrease = json.has("weight_cap_increase") ? json.get("weight_cap_increase").getAsInt() : 0;
 
@@ -132,7 +131,7 @@ public class EraTransitionDataHandler {
 
         return new EraTransitionDef(id, fromEra, fromOrientation, orientationLabel, iconItem,
             resourceCost, requiredResidents, requiredBuildings, Collections.unmodifiableList(unlockedBuildingIds),
-            nextOrientation, weightCapIncrease, minWeightPercent, structureLabel, unlockNewBuilder,
+            nextOrientation, weightCapIncrease, structureLabel, unlockNewBuilder,
             Collections.unmodifiableList(autoUpgradeIds));
     }
 

@@ -5,7 +5,6 @@
   "structure_label": "Village",
   "icon_item": "minecraft:emerald",
 
-  "min_weight_percent": 90,
   "weight_cap_increase": 10,
 
   "resource_cost": [
@@ -17,8 +16,10 @@
   "required_buildings": [
     { "defId": "wild_spot", "count": 1 }
   ],
-  "unlocked_building_ids": ["merchant_shop", "lone_place", "carpenter", "lone_garden", "fountain_place"],
+  "unlocked_building_ids": ["lone_garden", "carpenter", "merchant_shop", "lone_place", "fountain_place"],
   "unlock_new_builder": true,
+  "auto_upgrade_ids": ["settlement_3"],
+
 
   "next_orientation": "urban"
 }

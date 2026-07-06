@@ -4,6 +4,10 @@
     "entry_pool":  "onceuponatown:streets",
     "terrain_matching":  true,
     "icon_item":  "minecraft:dirt_path",
+    "obstacle_blocks": [
+        "minecraft:oak_log",
+        "minecraft:oak_leaves"
+    ],
     "footprint":  [
                       "0001100",
                       "0001100",

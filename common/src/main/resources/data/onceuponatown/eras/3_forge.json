@@ -5,7 +5,6 @@
   "structure_label": "Village",
   "icon_item": "minecraft:anvil",
 
-  "min_weight_percent": 90,
   "weight_cap_increase": 10,
 
   "resource_cost": [
@@ -17,6 +16,7 @@
   "required_buildings": [
     { "defId": "stone_breach", "count": 2 }
   ],
+  "auto_upgrade_ids": ["settlement"],
 
   "next_orientation": "forge"
 }

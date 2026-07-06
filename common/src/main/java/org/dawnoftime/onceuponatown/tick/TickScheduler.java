@@ -11,6 +11,7 @@ import org.dawnoftime.onceuponatown.registry.EntityRegistry;
 import org.dawnoftime.onceuponatown.town.ActiveBuildState;
 import org.dawnoftime.onceuponatown.town.LevelTowns;
 import org.dawnoftime.onceuponatown.datapack.QuestDataHandler;
+import org.dawnoftime.onceuponatown.town.PlacedBuilding;
 import org.dawnoftime.onceuponatown.town.Quest;
 import org.dawnoftime.onceuponatown.town.QuestDef;
 import org.dawnoftime.onceuponatown.town.QuestManager;
@@ -110,6 +111,24 @@ public class TickScheduler {
         Map<String, Long> lastCompleted = town.getQuestDefLastCompleted();
 
         for (QuestDef def : QuestDataHandler.getAll()) {
+
+            if ("SITE_CLEARANCE".equals(def.type())) {
+                String targetDefId = def.targetBuildingDefId();
+                if (targetDefId == null) continue;
+                if (!prerequisitesMet(def.prerequisites(), town, inventory)) continue;
+                for (PlacedBuilding building : town.getBuildings()) {
+                    if (!building.defId.equals(targetDefId)) continue;
+                    if (QuestManager.isAlreadyActiveForBuilding(def, building.worldPos, town.getActiveQuests())) continue;
+                    String instanceKey = def.id() + ":" + building.worldPos.asLong();
+                    if (lastCompleted.getOrDefault(instanceKey, 0L) > 0) continue;
+                    Quest q = QuestManager.buildFromDef(def, building.worldPos);
+                    town.addQuest(q);
+                    changed = true;
+                }
+                continue;
+            }
+
+            // Standard flow for TASK and NOTE
             if (QuestManager.isAlreadyActive(def, town.getActiveQuests())) continue;
 
             if ("TASK".equals(def.type())) {

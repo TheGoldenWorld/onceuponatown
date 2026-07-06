@@ -20,6 +20,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.dawnoftime.onceuponatown.Ouat;
 import org.dawnoftime.onceuponatown.client.ClientBuildingDefsRegistry;
+import org.dawnoftime.onceuponatown.client.ClientSessionState;
 import org.dawnoftime.onceuponatown.client.TownHubClientState;
 import org.dawnoftime.onceuponatown.client.gui.tooltip.BuildingProductionTooltip;
 import org.dawnoftime.onceuponatown.client.gui.widgets.DraggableWidget;
@@ -35,9 +36,11 @@ import org.dawnoftime.onceuponatown.screen.TownHubMenu;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
 
@@ -121,6 +124,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
     private int activeTab = 0; // 0 = Stock, 1 = Construction, 2 = Upgrade
     private BlockPos anchorPos = BlockPos.ZERO;
     private final List<BuildingEntry> buildingCatalog = new ArrayList<>();
+    private List<BuildingEntry> visibleCatalog = new ArrayList<>();
+    private String lastRenderedSelectedPath = "##uninitialized##";
     private final List<ClientQueueEntry> constructionQueueClient = new ArrayList<>();
     private final Map<String, Integer> stockSnapshot = new HashMap<>();
     private final List<String> boostedBuildingIds = new ArrayList<>();
@@ -339,6 +344,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         }
         // Play firework sound when era advances
         if (lastKnownEra >= 0 && currentEra > prevEra) {
+            ClientSessionState.selectedEraPathId = null;
             var mc = net.minecraft.client.Minecraft.getInstance();
             if (mc.level != null && mc.player != null) {
                 mc.level.playLocalSound(mc.player.blockPosition(),
@@ -404,6 +410,24 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
             CompoundTag data = TownHubClientState.pendingLogEntry;
             TownHubClientState.pendingLogEntry = null;
             applyLogEntry(data);
+        }
+
+        // Rebuild visible catalog when the era path selection changes
+        String currentPath = ClientSessionState.selectedEraPathId;
+        if (currentPath != lastRenderedSelectedPath
+                && (currentPath == null || !currentPath.equals(lastRenderedSelectedPath))) {
+            rebuildVisibleCatalog();
+            catalogScrollOffset = 0;
+            if (selectedCatalogBuildingId != null) {
+                boolean stillVisible = false;
+                for (BuildingEntry e : visibleCatalog) {
+                    if (e.id().equals(selectedCatalogBuildingId)) { stillVisible = true; break; }
+                }
+                if (!stillVisible) {
+                    selectedCatalogBuildingId = null;
+                    constructionPreview = null;
+                }
+            }
         }
 
         this.renderBackground(guiGraphics);
@@ -545,7 +569,6 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         if (data.contains("CurrentWeight")) {
             currentWeight = data.getInt("CurrentWeight");
             maxWeight = data.getInt("MaxWeight");
-            refreshEraWidgetFromWeight();
         }
         if (data.contains("BuildingCounts")) {
             refreshEraWidgetFromBuildingCounts(data.getCompound("BuildingCounts"));
@@ -576,6 +599,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
             constructionPreview = null;
         }
         if (lastKnownEra >= 0 && currentEra > prevEra) {
+            ClientSessionState.selectedEraPathId = null;
             var mc = net.minecraft.client.Minecraft.getInstance();
             if (mc.level != null && mc.player != null) {
                 mc.level.playLocalSound(mc.player.blockPosition(),
@@ -765,6 +789,36 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                 productionBonus, baseConsumption, maxConsumption, maxResidents, nextEra,
                 nbtPath, hasBuilt, nbtLevels, builtCount, weight));
         });
+        rebuildVisibleCatalog();
+    }
+
+    private void rebuildVisibleCatalog() {
+        String selectedPath = ClientSessionState.selectedEraPathId;
+        lastRenderedSelectedPath = selectedPath;
+        if (selectedPath == null || eraTransitions.isEmpty()) {
+            visibleCatalog = new ArrayList<>(buildingCatalog);
+            return;
+        }
+        Set<String> allowedIds = null;
+        for (EraProgressDraggableWidget.EraPathOption opt : eraTransitions) {
+            if (opt.id().equals(selectedPath)) {
+                allowedIds = new HashSet<>();
+                for (EraProgressDraggableWidget.UnlockEntry u : opt.unlocked()) {
+                    allowedIds.add(u.defId());
+                }
+                break;
+            }
+        }
+        if (allowedIds == null) {
+            visibleCatalog = new ArrayList<>(buildingCatalog);
+            return;
+        }
+        final Set<String> allowed = allowedIds;
+        List<BuildingEntry> filtered = new ArrayList<>();
+        for (BuildingEntry e : buildingCatalog) {
+            if (!e.nextEra() || allowed.contains(e.id())) filtered.add(e);
+        }
+        visibleCatalog = filtered;
     }
 
     private void renderTabs(GuiGraphics g, int mx, int my) {
@@ -826,8 +880,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                 int sx = leftPos + QUEUE_GRID_X + col * CELL;
                 int sy = topPos + rowYOffsets[row];
 
-                if (catalogIdx < buildingCatalog.size()) {
-                    BuildingEntry entry = buildingCatalog.get(catalogIdx);
+                if (catalogIdx < visibleCatalog.size()) {
+                    BuildingEntry entry = visibleCatalog.get(catalogIdx);
                     boolean affordable = isAffordable(entry) && meetsPrerequisites(entry);
                     boolean selected = entry.id().equals(selectedCatalogBuildingId);
                     int color = affordable ? categoryColor(entry.category()) : dim(categoryColor(entry.category()));
@@ -875,7 +929,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         }
 
         // Scroll indicator
-        int totalRows = (buildingCatalog.size() + AVAIL_COLS - 1) / AVAIL_COLS;
+        int totalRows = (visibleCatalog.size() + AVAIL_COLS - 1) / AVAIL_COLS;
         if (totalRows > CATALOG_ROWS) {
             String scrollText = (catalogScrollOffset + 1) + "/" + (totalRows - CATALOG_ROWS + 1);
             g.drawString(font, scrollText, leftPos + imageWidth - 4 - font.width(scrollText),
@@ -958,8 +1012,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
             }
             lines.add(Component.literal("Shift + Right-click to remove").withStyle(s -> s.withColor(0x888888)));
             g.renderComponentTooltip(font, lines, mx, my);
-        } else if (hoveredCatalogSlot >= 0 && hoveredCatalogSlot < buildingCatalog.size()) {
-            BuildingEntry entry = buildingCatalog.get(hoveredCatalogSlot);
+        } else if (hoveredCatalogSlot >= 0 && hoveredCatalogSlot < visibleCatalog.size()) {
+            BuildingEntry entry = visibleCatalog.get(hoveredCatalogSlot);
             List<Component> lines = new ArrayList<>();
             lines.add(Component.literal(formatId(entry.id())).withStyle(s -> s.withBold(true)));
             if (entry.nextEra()) {
@@ -1007,14 +1061,15 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
             boolean atMax = maxLevel > 0 && sel.upgradeLevel() >= maxLevel;
 
             if (defEntry != null && maxLevel > 0) {
+                boolean isTownCenter = "town_center".equals(sel.category());
                 boolean pending = isUpgradePending(sel);
-                boolean canAfford = !atMax && !pending && canAffordUpgrade(sel, defEntry);
+                boolean canAfford = !atMax && !pending && !isTownCenter && canAffordUpgrade(sel, defEntry);
 
                 int btnW = 46;
                 int btnX = leftPos + QUEUE_GRID_X + (AVAIL_COLS * CELL) - 2 - btnW;
                 int btnY = topPos + 126;
                 int btnH = 11;
-                boolean btnActive = !atMax && !pending;
+                boolean btnActive = !atMax && !pending && !isTownCenter;
                 boolean btnHover = btnActive && mx >= btnX && mx < btnX + btnW && my >= btnY && my < btnY + btnH;
 
                 // Right zone: stat gauges (ghost fill shows next-level delta on button hover)
@@ -1342,11 +1397,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                 boolean ok = have >= ce.amount();
                 String itemName = ce.itemId().contains(":")
                     ? ce.itemId().substring(ce.itemId().indexOf(':') + 1) : ce.itemId();
-                lines.add(Component.literal(ce.amount() + "x " + formatId(itemName))
+                lines.add(Component.literal(have + "/" + ce.amount() + " " + formatId(itemName))
                     .withStyle(s -> s.withColor(ok ? 0x55FF55 : 0xFF5555)));
-            }
-            if (!canAffordUpgrade(entry, defEntry)) {
-                lines.add(Component.literal("Not enough resources").withStyle(s -> s.withColor(0xFF5555)));
             }
         } else if (maxLevel > 0 && entry.upgradeLevel() >= maxLevel) {
             lines.add(Component.literal("Fully upgraded").withStyle(s -> s.withColor(0xFFFFDD44)));
@@ -1365,7 +1417,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                 int btnX = leftPos + QUEUE_GRID_X + (AVAIL_COLS * CELL) - 2 - 46;
                 int btnY = topPos + 126;
                 if (mX >= btnX && mX < btnX + 46 && mY >= btnY && mY < btnY + 11) {
-                    if (!isUpgradePending(sel) && canAffordUpgrade(sel, defEntry)) {
+                    if (!isUpgradePending(sel) && canAffordUpgrade(sel, defEntry) && !"town_center".equals(sel.category())) {
                         NetworkHelper.sendUpgradeBuildingPacket.accept(anchorPos, sel.worldPosLong());
                     }
                     return;
@@ -1614,8 +1666,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
             // Construction preview: forward clicks so drag-to-rotate works
             if (constructionPreview != null && constructionPreview.mouseClicked(mX, mY, button)) return true;
             // Catalog slot: left-click selects and populates Zone B
-            if (button == 0 && hoveredCatalogSlot >= 0 && hoveredCatalogSlot < buildingCatalog.size()) {
-                BuildingEntry catalogEntry = buildingCatalog.get(hoveredCatalogSlot);
+            if (button == 0 && hoveredCatalogSlot >= 0 && hoveredCatalogSlot < visibleCatalog.size()) {
+                BuildingEntry catalogEntry = visibleCatalog.get(hoveredCatalogSlot);
                 selectedCatalogBuildingId = catalogEntry.id();
                 updateConstructionPreview(catalogEntry);
                 return true;
@@ -1780,7 +1832,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         }
         if (activeTab == 1) {
             if (constructionPreview != null && constructionPreview.mouseScrolled(mX, mY, delta)) return true;
-            int totalRows = (buildingCatalog.size() + AVAIL_COLS - 1) / AVAIL_COLS;
+            int totalRows = (visibleCatalog.size() + AVAIL_COLS - 1) / AVAIL_COLS;
             int maxOffset = Math.max(0, totalRows - CATALOG_ROWS);
             catalogScrollOffset = Math.max(0, Math.min(maxOffset,
                 catalogScrollOffset - (int) Math.signum(delta)));
@@ -1814,10 +1866,10 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                 if (have < cr.amount()) resourcesMet = false;
             }
             boolean buildingsMet = opt.requiredBuildings().stream().allMatch(rb -> rb.have() >= rb.count());
-            boolean newPrereqsMet = opt.weightMet() && resourcesMet && opt.residentsMet() && buildingsMet;
+            boolean newPrereqsMet = resourcesMet && opt.residentsMet() && buildingsMet;
             updated.add(new EraProgressDraggableWidget.EraPathOption(
                 opt.id(), opt.orientationLabel(), opt.iconItem(),
-                newPrereqsMet, opt.requiredWeight(), opt.currentWeight(), opt.maxWeight(), opt.weightMet(),
+                newPrereqsMet,
                 updatedCost, opt.requiredResidents(), opt.activeResidents(),
                 opt.residentsMet(), opt.requiredBuildings(), opt.unlocked()
             ));
@@ -1840,10 +1892,10 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                 if (have < rb.count()) buildingsMet = false;
             }
             boolean resourcesMet = opt.resourceCost().stream().allMatch(cr -> cr.have() >= cr.amount());
-            boolean newPrereqsMet = opt.weightMet() && resourcesMet && opt.residentsMet() && buildingsMet;
+            boolean newPrereqsMet = resourcesMet && opt.residentsMet() && buildingsMet;
             updated.add(new EraProgressDraggableWidget.EraPathOption(
                 opt.id(), opt.orientationLabel(), opt.iconItem(),
-                newPrereqsMet, opt.requiredWeight(), opt.currentWeight(), opt.maxWeight(), opt.weightMet(),
+                newPrereqsMet,
                 opt.resourceCost(), opt.requiredResidents(), opt.activeResidents(),
                 opt.residentsMet(), updatedBuildings, opt.unlocked()
             ));
@@ -1852,40 +1904,14 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         eraWidget.updateData(currentEra, eraTransitions);
     }
 
-    // Rebuilds the currentWeight/maxWeight fields of each path option from the locally
-    // tracked weight values, then pushes updated transitions to the era widget.
-    // Called when a building list packet arrives (building placed or queued).
-    private void refreshEraWidgetFromWeight() {
-        if (eraWidget == null || eraTransitions.isEmpty()) return;
-        List<EraProgressDraggableWidget.EraPathOption> updated = new ArrayList<>();
-        for (EraProgressDraggableWidget.EraPathOption opt : eraTransitions) {
-            boolean newWeightMet = currentWeight >= opt.requiredWeight() && currentWeight <= maxWeight;
-            boolean resourcesMet = opt.resourceCost().stream().allMatch(cr -> cr.have() >= cr.amount());
-            boolean buildingsMet = opt.requiredBuildings().stream().allMatch(rb -> rb.have() >= rb.count());
-            boolean newPrereqsMet = newWeightMet && resourcesMet && opt.residentsMet() && buildingsMet;
-            updated.add(new EraProgressDraggableWidget.EraPathOption(
-                opt.id(), opt.orientationLabel(), opt.iconItem(),
-                newPrereqsMet, opt.requiredWeight(), currentWeight, maxWeight, newWeightMet,
-                opt.resourceCost(), opt.requiredResidents(), opt.activeResidents(),
-                opt.residentsMet(), opt.requiredBuildings(), opt.unlocked()
-            ));
-        }
-        eraTransitions = updated;
-        eraWidget.updateData(currentEra, eraTransitions);
-    }
-
     private static List<EraProgressDraggableWidget.EraPathOption> parseEraTransitions(CompoundTag hub) {
         List<EraProgressDraggableWidget.EraPathOption> result = new ArrayList<>();
-        int cw = hub.getInt("CurrentWeight");
-        int mw = hub.getInt("MaxWeight");
         hub.getList("EraTransitions", Tag.TAG_COMPOUND).forEach(raw -> {
             CompoundTag tt = (CompoundTag) raw;
             String id = tt.getString("Id");
             String orientationLabel = tt.getString("OrientationLabel");
             String iconItem = tt.getString("IconItem");
             boolean prereqsMet = tt.getBoolean("PrereqsMet");
-            int reqWeight = tt.getInt("RequiredWeight");
-            boolean weightMet = tt.getBoolean("WeightMet");
             List<EraProgressDraggableWidget.CostRow> costRows = new ArrayList<>();
             tt.getList("ResourceCost", Tag.TAG_COMPOUND).forEach(cr -> {
                 CompoundTag c = (CompoundTag) cr;
@@ -1919,7 +1945,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                     cost, ut.getInt("RequiredResidents"), unlockReqBuilds, ut.getBoolean("HasProduction")));
             });
             result.add(new EraProgressDraggableWidget.EraPathOption(
-                id, orientationLabel, iconItem, prereqsMet, reqWeight, cw, mw, weightMet,
+                id, orientationLabel, iconItem, prereqsMet,
                 costRows, reqRes, activeRes, resMet, reqBuilds, unlocked));
         });
         return result;
@@ -2015,8 +2041,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         if (fillPx > 0) g.fill(barX, barY, barX + fillPx, barY + barH, fillColor);
 
         // Ghost preview when hovering a catalog slot (Build tab only)
-        if (activeTab == 1 && hoveredCatalogSlot >= 0 && hoveredCatalogSlot < buildingCatalog.size()) {
-            BuildingEntry hov = buildingCatalog.get(hoveredCatalogSlot);
+        if (activeTab == 1 && hoveredCatalogSlot >= 0 && hoveredCatalogSlot < visibleCatalog.size()) {
+            BuildingEntry hov = visibleCatalog.get(hoveredCatalogSlot);
             int weightDelta = hov.weight();
             if (weightDelta > 0 && maxWeight > 0) {
                 float ghostFrac = (float) weightDelta / maxWeight;
@@ -2029,7 +2055,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
             }
         }
 
-        String label = "ERA " + currentEra + "  " + currentWeight + "/" + maxWeight;
+        String label = net.minecraft.network.chat.Component.translatable("onceuponatown.catalog.space_remaining").getString()
+                + " : " + currentWeight + "/" + maxWeight;
         g.drawString(font, label, barX + 3, barY + 1, 0xFFCCCCCC, false);
     }
 

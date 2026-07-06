@@ -22,8 +22,6 @@ public class EraTransitionDef {
     public final String nextOrientation;
     // How much to add to Town.currentMaxWeight when this transition completes
     public final int weightCapIncrease;
-    // If > 0, required weight = round(minWeightPercent / 100.0 * currentMaxWeight).
-    public final int minWeightPercent;
     // Structure type label after this transition completes (e.g. "Settlement", "Village", "Castle")
     public final String structureLabel;
     // If true, completing this transition increments Town.targetBuilderCount by 1
@@ -35,7 +33,7 @@ public class EraTransitionDef {
                             String iconItem, List<ItemCost> resourceCost,
                             int requiredResidents, List<BuildingDef.BuildingRequirement> requiredBuildings,
                             List<String> unlockedBuildingIds, String nextOrientation,
-                            int weightCapIncrease, int minWeightPercent, String structureLabel,
+                            int weightCapIncrease, String structureLabel,
                             boolean unlockNewBuilder, List<String> autoUpgradeIds) {
         this.id = id;
         this.fromEra = fromEra;
@@ -48,7 +46,6 @@ public class EraTransitionDef {
         this.unlockedBuildingIds = unlockedBuildingIds;
         this.nextOrientation = nextOrientation;
         this.weightCapIncrease = weightCapIncrease;
-        this.minWeightPercent = minWeightPercent;
         this.structureLabel = structureLabel;
         this.unlockNewBuilder = unlockNewBuilder;
         this.autoUpgradeIds = autoUpgradeIds;

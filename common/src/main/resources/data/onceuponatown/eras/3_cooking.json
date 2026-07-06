@@ -5,7 +5,6 @@
   "structure_label": "Village",
   "icon_item": "minecraft:smoker",
 
-  "min_weight_percent": 90,
   "weight_cap_increase": 10,
 
   "resource_cost": [
@@ -17,6 +16,8 @@
   "required_buildings": [
     { "defId": "kitchen", "count": 1 }
   ],
+  "auto_upgrade_ids": ["settlement_2"],
+
 
   "next_orientation": "cooking"
 }

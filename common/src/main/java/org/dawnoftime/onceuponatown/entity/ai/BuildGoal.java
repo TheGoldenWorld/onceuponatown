@@ -9,8 +9,10 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.phys.Vec3;
 import org.dawnoftime.onceuponatown.building.schematic.SchematicBlock;
 import org.dawnoftime.onceuponatown.datapack.BuilderConfigDataHandler;
@@ -45,8 +47,6 @@ public class BuildGoal implements BuildTask {
     private static int burstPauseMax()     { return BuilderConfigDataHandler.get().burstPauseMaxTicks; }
     private static int maxBurstExtra()     { return BuilderConfigDataHandler.get().maxBurstExtraBlocks; }
     private static double reachDist()      { return BuilderConfigDataHandler.get().blockReachDistance; }
-    private static int stuckFallback()     { return BuilderConfigDataHandler.get().stuckFallbackTicks; }
-    private static int movingTimeout()     { return BuilderConfigDataHandler.get().movingTimeoutTicks; }
     private static float planReadChance()  { return BuilderConfigDataHandler.get().planReadChance; }
     private static int planReadMin()       { return BuilderConfigDataHandler.get().planReadMinTicks; }
     private static int planReadMax()       { return BuilderConfigDataHandler.get().planReadMaxTicks; }
@@ -55,8 +55,6 @@ public class BuildGoal implements BuildTask {
     private final BuildAction action;
     private Phase phase = Phase.MOVING;
     private final GoToPosition goTo;
-    private boolean failed = false;
-    private int movingTicks = 0;
 
     // BUILDING state
     private List<SchematicBlock> blocks = null;
@@ -65,16 +63,15 @@ public class BuildGoal implements BuildTask {
     private int burstBlocksLeft = 0;
     private GoToPosition buildGoTo = null;
     private BlockPos currentBuildTarget = null;
-    private int stuckTicks = 0;
 
     public BuildGoal(Npc npc, BuildAction action) {
         this.npc = npc;
         this.action = action;
-        this.goTo = new GoToPosition(npc, action.getTargetPos(), BuilderConfigDataHandler.get().walkSpeed, 5.5);
+        this.goTo = new GoToPosition(npc, action.getTargetPos(), BuilderConfigDataHandler.get().walkSpeed, reachDist());
     }
 
     @Override
-    public boolean isFailed() { return failed || action.isFailed(); }
+    public boolean isFailed() { return action.isFailed(); }
 
     @Override
     public BlockPos getFinalPlacementPos() { return action.getOrigin(); }
@@ -89,11 +86,6 @@ public class BuildGoal implements BuildTask {
     }
 
     private boolean tickMoving() {
-        if (++movingTicks > movingTimeout()) {
-            LOGGER.warn("[OUAT-BUILD] MOVING timeout -- target={}", action.getTargetPos());
-            failed = true;
-            return true;
-        }
         if (!goTo.tick()) return false;
 
         action.onArrived(npc);
@@ -147,8 +139,7 @@ public class BuildGoal implements BuildTask {
         double distSq = npc.distanceToSqr(Vec3.atCenterOf(nextWorldPos));
         boolean inReach = distSq <= reachDist() * reachDist();
 
-        if (!inReach && stuckTicks < stuckFallback()) {
-            stuckTicks++;
+        if (!inReach) {
             if (!nextWorldPos.equals(currentBuildTarget)) {
                 currentBuildTarget = nextWorldPos;
                 if (buildGoTo == null) buildGoTo = new GoToPosition(npc, nextWorldPos, BuilderConfigDataHandler.get().walkSpeed, reachDist());
@@ -159,7 +150,6 @@ public class BuildGoal implements BuildTask {
         }
 
         npc.getNavigation().stop();
-        stuckTicks = 0;
 
         if (buildSpeedCooldown > 0) { buildSpeedCooldown--; return false; }
 
@@ -180,6 +170,21 @@ public class BuildGoal implements BuildTask {
         if (b.nbt() != null) {
             BlockEntity be = sl.getBlockEntity(worldPos);
             if (be != null) be.load(b.nbt().copy());
+        }
+
+        // Doors are 2-block-tall structures. Placing only the lower half leaves a broken half-door
+        // in the world that blocks the NPC's pathfinder until the upper half is placed later.
+        // Immediately find and place the upper half to keep the door complete at all times.
+        if (b.state().getBlock() instanceof DoorBlock &&
+                b.state().getValue(DoorBlock.HALF) == DoubleBlockHalf.LOWER) {
+            BlockPos upperPos = worldPos.above();
+            for (int k = buildProgress + 1; k < blocks.size(); k++) {
+                if (action.getOrigin().offset(blocks.get(k).localPos()).equals(upperPos)) {
+                    sl.setBlock(upperPos, blocks.get(k).state(), Block.UPDATE_ALL);
+                    blocks.remove(k);
+                    break;
+                }
+            }
         }
 
         buildProgress++;

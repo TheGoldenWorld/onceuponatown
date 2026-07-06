@@ -44,7 +44,7 @@ public class BuildSchematic {
     private static final BlockIgnoreProcessor SKIP_AIR = new BlockIgnoreProcessor(List.of(Blocks.AIR, Blocks.STRUCTURE_VOID));
 
     // Filter A: blocks the terrain scan skips past when descending to find ground. Not deleted, not placed.
-    private static final Set<Block> SCAN_IGNORE_BLOCKS;
+    public static final Set<Block> SCAN_IGNORE_BLOCKS;
     static {
         Set<Block> s = new HashSet<>();
         s.add(Blocks.OAK_LEAVES); s.add(Blocks.BIRCH_LEAVES); s.add(Blocks.SPRUCE_LEAVES);
@@ -99,11 +99,28 @@ public class BuildSchematic {
     // SCAN_IGNORE_BLOCKS (vegetation, logs, surface features) are skipped during the downward terrain scan.
     public static boolean placeTerrainMatched(ServerLevel level, BlockPos originPos,
                                                ResourceLocation nbtLocation, Rotation rotation) {
+        return placeTerrainMatchedImpl(level, originPos, nbtLocation, rotation, null, null);
+    }
+
+    // Same as placeTerrainMatched, but also records the world positions of blocks whose block ID
+    // appears in obstacleBlockIds into obstacleOut. Positions are captured during placement,
+    // before terrain is modified, so they are always accurate regardless of column topology.
+    public static boolean placeTerrainMatched(ServerLevel level, BlockPos originPos,
+                                               ResourceLocation nbtLocation, Rotation rotation,
+                                               List<String> obstacleBlockIds, List<BlockPos> obstacleOut) {
+        return placeTerrainMatchedImpl(level, originPos, nbtLocation, rotation, obstacleBlockIds, obstacleOut);
+    }
+
+    private static boolean placeTerrainMatchedImpl(ServerLevel level, BlockPos originPos,
+                                                    ResourceLocation nbtLocation, Rotation rotation,
+                                                    List<String> obstacleBlockIds, List<BlockPos> obstacleOut) {
         Optional<StructureTemplate> templateOpt = level.getStructureManager().get(nbtLocation);
         if (templateOpt.isEmpty()) {
             LOGGER.error("[OUAT] NBT not found: {}", nbtLocation);
             return false;
         }
+
+        boolean collect = obstacleBlockIds != null && !obstacleBlockIds.isEmpty() && obstacleOut != null;
 
         // All non-air blocks with rotation applied; jigsaw blocks already resolved to final_state.
         List<SchematicBlock> blocks = SchematicReader.readSortedBlocks(templateOpt.get(), rotation);
@@ -141,7 +158,12 @@ public class BuildSchematic {
             int deltaY = terrainY - templateFloorY;
 
             for (SchematicBlock b : column) {
-                level.setBlock(new BlockPos(wx, b.localPos().getY() + deltaY, wz), b.state(), Block.UPDATE_ALL);
+                BlockPos worldPos = new BlockPos(wx, b.localPos().getY() + deltaY, wz);
+                level.setBlock(worldPos, b.state(), Block.UPDATE_ALL);
+                if (collect) {
+                    String id = BuiltInRegistries.BLOCK.getKey(b.state().getBlock()).toString();
+                    if (obstacleBlockIds.contains(id)) obstacleOut.add(worldPos);
+                }
             }
         }
 
@@ -304,34 +326,32 @@ public class BuildSchematic {
         return Math.min(surface, pos.getY() + 3);
     }
 
-    // For every DIRT_PATH in the bounding box that borders water on at least one
-    // horizontal side, replaces it with OAK_PLANKS (pond-edge/dock effect).
-    // Y scan range is extended +-20 from the template BB to absorb terrain snapping.
-    public static void applyPondEdgeRules(ServerLevel level, BoundingBox bb) {
-        int yMin = bb.minY() - 20;
-        int yMax = bb.maxY() + 20;
+    // Scans the terrain footprint of an NBT placement and returns true if any column sits over open water.
+    // Called before placement to reject candidates whose footprint overlaps water at terrain level.
+    // Fails open (returns false) when the NBT cannot be loaded, so a missing template never blocks expansion.
+    public static boolean footprintContainsWater(ServerLevel level, BlockPos originPos,
+                                                  ResourceLocation nbtLocation, Rotation rotation) {
+        Optional<StructureTemplate> templateOpt = level.getStructureManager().get(nbtLocation);
+        if (templateOpt.isEmpty()) return false;
 
-        for (int x = bb.minX(); x <= bb.maxX(); x++) {
-            for (int z = bb.minZ(); z <= bb.maxZ(); z++) {
-                for (int y = yMin; y <= yMax; y++) {
-                    BlockPos pos = new BlockPos(x, y, z);
-                    if (!level.getBlockState(pos).is(Blocks.DIRT_PATH)) continue;
-                    if (bordersWater(level, pos)) {
-                        level.setBlock(pos, Blocks.OAK_PLANKS.defaultBlockState(), Block.UPDATE_ALL);
-                    }
-                }
+        List<SchematicBlock> blocks = SchematicReader.readSortedBlocks(templateOpt.get(), rotation);
+
+        Set<Long> visited = new HashSet<>();
+        for (SchematicBlock b : blocks) {
+            long key = BlockPos.asLong(b.localPos().getX(), 0, b.localPos().getZ());
+            if (!visited.add(key)) continue;
+
+            int wx = originPos.getX() + b.localPos().getX();
+            int wz = originPos.getZ() + b.localPos().getZ();
+
+            int scanStart = level.getHeight(Heightmap.Types.WORLD_SURFACE, wx, wz) - 1;
+            for (int y = scanStart; y >= level.getMinBuildHeight(); y--) {
+                BlockState bs = level.getBlockState(new BlockPos(wx, y, wz));
+                if (bs.isAir() || SCAN_IGNORE_BLOCKS.contains(bs.getBlock())) continue;
+                if (bs.is(Blocks.WATER)) return true;
+                if (level.getBlockState(new BlockPos(wx, y + 1, wz)).is(Blocks.WATER)) return true;
+                break;
             }
-        }
-    }
-
-    private static boolean bordersWater(ServerLevel level, BlockPos pos) {
-        for (Direction dir : new Direction[]{ Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST }) {
-            if (level.getBlockState(pos.relative(dir)).is(Blocks.WATER)) return true;
-        }
-        // Check diagonal neighbours (NE, NW, SE, SW) to fill corner gaps.
-        int[][] diagonals = { {1,1},{1,-1},{-1,1},{-1,-1} };
-        for (int[] d : diagonals) {
-            if (level.getBlockState(pos.offset(d[0], 0, d[1])).is(Blocks.WATER)) return true;
         }
         return false;
     }
@@ -386,7 +406,7 @@ public class BuildSchematic {
         Optional<StructureTemplate> tpl = level.getStructureManager().get(def.nbt);
         if (tpl.isEmpty()) return List.of();
         BlockPos origin = originFromBbMin(bbMinPos, tpl.get().getSize(), pieceRotation);
-        return readJigsawPoints(level, origin, defId, pieceRotation, BlockPos.ZERO.below(9999));
+        return readJigsawPoints(level, origin, defId, pieceRotation, BlockPos.ZERO.below(9999), false);
     }
 
     // Variant for initial village scan: includes terminator connectors (pool = empty).
@@ -417,9 +437,13 @@ public class BuildSchematic {
 
     // Reads jigsaw blocks from a placed template to extract new ConnectionPoints in world coords.
     // Skips the entry jigsaw (at usedConnectorWorldPos) and terminators (pool = empty or minecraft:empty).
+    // terrainMatching: when true, the Y of each connector is corrected by scanning the world surface
+    // at the connector XZ -- terrain-matched roads adjust each column independently so the template
+    // mathematical Y (originPos.Y + localY) diverges from the actual placement Y on any slope.
     public static List<ConnectionPoint> readJigsawPoints(ServerLevel level, BlockPos originPos,
                                                           String defId, Rotation rotation,
-                                                          BlockPos usedConnectorWorldPos) {
+                                                          BlockPos usedConnectorWorldPos,
+                                                          boolean terrainMatching) {
         BuildingDef def = BuildingDataHandler.get(defId).orElse(null);
         if (def == null) return List.of();
 
@@ -440,6 +464,21 @@ public class BuildSchematic {
 
             // Skip the entry connector that was consumed to attach this building
             if (worldPos.equals(usedConnectorWorldPos)) continue;
+
+            // For terrain-matched structures (roads), originPos.Y is the terrain Y at the attachment
+            // point only. Each column was placed at its own terrain Y by placeTerrainMatchedImpl.
+            // Scan the world at the connector XZ to recover the actual Y where the block landed.
+            if (terrainMatching) {
+                int wx = worldPos.getX(), wz = worldPos.getZ();
+                int scanStart = level.getHeight(Heightmap.Types.WORLD_SURFACE, wx, wz) - 1;
+                for (int y = scanStart; y >= level.getMinBuildHeight(); y--) {
+                    BlockState bs = level.getBlockState(new BlockPos(wx, y, wz));
+                    if (!bs.isAir() && !SCAN_IGNORE_BLOCKS.contains(bs.getBlock())) {
+                        worldPos = new BlockPos(wx, y, wz);
+                        break;
+                    }
+                }
+            }
 
             Direction rawDir = info.state().getValue(JigsawBlock.ORIENTATION).front();
             Direction rotatedDir = rotation.rotate(rawDir);

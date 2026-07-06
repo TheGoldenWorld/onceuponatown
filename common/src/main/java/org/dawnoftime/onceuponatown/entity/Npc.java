@@ -17,7 +17,6 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
-import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.level.pathfinder.PathFinder;
 import org.dawnoftime.onceuponatown.entity.ai.OuatWalkNodeEvaluator;
@@ -88,7 +87,6 @@ public class Npc extends PathfinderMob {
     protected void registerGoals() {
         this.goalSelector.addGoal(1, new OpenDoorGoal(this, false));
         this.goalSelector.addGoal(2, new OpenFenceGateGoal(this));
-        this.goalSelector.addGoal(9, new WaterAvoidingRandomStrollGoal(this, 0.6));
         this.goalSelector.addGoal(10, new LookAtPlayerGoal(this, Player.class, 8.0f));
     }
 
@@ -131,14 +129,17 @@ public class Npc extends PathfinderMob {
     // Called by BuildGoal when construction is complete.
     // rotation and entryConnectorWorldPos are precomputed by SimpleStateMachine/BuildGoal.
     public void onBuildComplete(BlockPos builtAt, String buildingId, ConnectionPoint usedConnection,
-                                Rotation rotation, BlockPos entryConnectorWorldPos) {
+                                Rotation rotation, BlockPos entryConnectorWorldPos,
+                                List<BlockPos> obstaclePositions) {
         if (!(level() instanceof ServerLevel serverLevel)) return;
         LevelTowns.get(serverLevel).getAllTowns().stream()
             .filter(t -> t.getBuilderNpcIds().contains(getUUID()))
             .findFirst()
             .ifPresent(town -> {
+                boolean terrainMatching = BuildingDataHandler.get(buildingId)
+                    .map(d -> d.terrainMatching).orElse(false);
                 List<ConnectionPoint> connections = BuildSchematic.readJigsawPoints(
-                    serverLevel, builtAt, buildingId, rotation, entryConnectorWorldPos);
+                    serverLevel, builtAt, buildingId, rotation, entryConnectorWorldPos, terrainMatching);
                 BoundingBox bb = BuildingDataHandler.get(buildingId)
                     .flatMap(def -> def.terrainMatching
                         ? BuildSchematic.computeFootprintBoundingBox(serverLevel, builtAt, def.nbt, rotation)
@@ -147,7 +148,7 @@ public class Npc extends PathfinderMob {
                         builtAt.getX(), builtAt.getY(), builtAt.getZ(),
                         builtAt.getX(), builtAt.getY(), builtAt.getZ()
                     ));
-                town.registerBuilding(builtAt, buildingId, connections, bb, rotation);
+                town.registerBuilding(builtAt, buildingId, connections, bb, rotation, obstaclePositions);
                 LevelTowns.get(serverLevel).markDirty();
             });
     }

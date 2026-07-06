@@ -5,7 +5,6 @@
   "structure_label": "Village",
   "icon_item": "minecraft:smoker",
 
-  "min_weight_percent": 90,
   "weight_cap_increase": 10,
 
   "resource_cost": [
@@ -18,8 +17,10 @@
     { "defId": "oven", "count": 1 },
     { "defId": "bee_field", "count": 1 }
 
-  ],  "unlocked_building_ids": ["beekeeper", "kitchen", "lone_place"],
+  ],  "unlocked_building_ids": ["lone_place", "carpenter", "beekeeper", "kitchen"],
   "unlock_new_builder": true,
+  "auto_upgrade_ids": ["settlement_2"],
+
 
   "next_orientation": "cooking"
 }

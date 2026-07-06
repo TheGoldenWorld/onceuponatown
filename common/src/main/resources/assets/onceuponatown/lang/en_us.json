@@ -1,5 +1,6 @@
 {
   "onceuponatown.map_of": "Map of",
+  "onceuponatown.catalog.space_remaining": "Space remaining",
   "onceuponatown.production": "Produces",
   "onceuponatown.tooltip.produces": "Produces",
   "onceuponatown.tooltip.transforms": "Transforms",
@@ -24,6 +25,7 @@
   "onceuponatown.building.wild_crops": "Wild crops",
   "onceuponatown.building.wild_stone": "Wild stone",
   "onceuponatown.building.stone_breach": "Stone breach",
+  "onceuponatown.building.open_mine": "Open Mine",
   "onceuponatown.building.wild_bee": "Wild bee",
   "onceuponatown.building.potato_field": "Potato field",
   "onceuponatown.building.carrot_field": "Carrot field",
@@ -59,11 +61,22 @@
   "onceuponatown.building.street_10": "Street",
   "onceuponatown.building.street_11": "Street",
   "block.onceuponatown.town_anchor": "Town Anchor",
+
   "onceuponatown.quest.claim": "Contribute",
+  "onceuponatown.quest.verify": "Verify",
+  "onceuponatown.quest.clearance_condition": "Site cleared",
+
   "quest.onceuponatown.wood_supplies.title": "Wood supplies are running low",
   "quest.onceuponatown.wood_supplies.desc": "The builder requested us to bring some more wood. Someone know how to hold an axe ?",
   "quest.onceuponatown.stone_supplies.title": "Stone supplies are running low",
   "quest.onceuponatown.stone_supplies.desc": "The builder talked about a new resources that should improve the life here, thicker walls and more heat for winter. We have to collect more of it",
+
+  "quest.onceuponatown.fallen_tree.title": "Fallen tree on the road",
+  "quest.onceuponatown.fallen_tree.desc": "A fallen tree is blocking the road. It would be wise to remove it",
+
+  "quest.onceuponatown.remaining_trunks.title": "Remaining Trunks",
+  "quest.onceuponatown.remaining_trunks.desc": "The builder wasn't in the mood, he left some leftover",
+
   "quest.onceuponatown.new_visitor.title": "A new visitor",
   "quest.onceuponatown.new_visitor.desc": "Since the stranger's arrival, something has changed. The builder is waking up earlier and new walls are rising. We should keep an eye on him",
   "quest.onceuponatown.trusting_someone_else.title": "Trusting someone else",

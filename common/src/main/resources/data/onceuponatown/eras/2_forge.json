@@ -5,7 +5,6 @@
   "structure_label": "Village",
   "icon_item": "minecraft:anvil",
 
-  "min_weight_percent": 90,
   "weight_cap_increase": 10,
 
   "resource_cost": [
@@ -13,12 +12,14 @@
     { "item": "minecraft:cobblestone", "amount": 10 }
   ],
 
-  "required_residents": 3,
+  "required_residents": 4,
   "required_buildings": [
     { "defId": "wild_stone", "count": 2 }
   ],
-  "unlocked_building_ids": ["carpenter", "lone_place"],
+  "unlocked_building_ids": ["lone_place", "carpenter"],
   "unlock_new_builder": true,
+  "auto_upgrade_ids": ["settlement"],
+
 
   "next_orientation": "forge"
 }

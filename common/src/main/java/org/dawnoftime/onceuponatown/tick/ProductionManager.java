@@ -40,6 +40,14 @@ public class ProductionManager {
             })
             .sum();
 
+        // Town-wide stock bonus: extra capacity stacks added to every productive building (granary mechanic).
+        int townStockBonus = town.getBuildings().stream()
+            .mapToInt(b -> {
+                BuildingDef bDef = BuildingDataHandler.get(b.getDefId()).orElse(null);
+                return bDef == null ? 0 : b.resolvedStockBonus(bDef);
+            })
+            .sum();
+
         for (PlacedBuilding building : town.getBuildings()) {
             BuildingDef def = BuildingDataHandler.get(building.getDefId()).orElse(null);
             if (def == null) continue;
@@ -57,14 +65,10 @@ public class ProductionManager {
                     ? (int) Math.max(1, Math.round(entry.everyTicks() / (1.0 + stats.totalCadenceMultiplier())))
                     : entry.everyTicks();
                 if (gameTime % effectiveTicks != 0) continue;
-                int current = inv.getStock(entry.item());
-                int max = inv.getMaxStock(entry.item());
-                if (current < max) {
-                    double totalMultiplier = bonusMultiplier * building.getInstanceProductionMultiplier();
-                    int boostedAmount = (int) Math.round(entry.amount() * totalMultiplier);
-                    building.forceAdd(entry.item(), Math.min(boostedAmount, max - current));
-                    changed = true;
-                }
+                double totalMultiplier = bonusMultiplier * building.getInstanceProductionMultiplier();
+                int boostedAmount = (int) Math.round(entry.amount() * totalMultiplier);
+                int resolvedCapacity = (entry.capacityStacks() + townStockBonus) * 64;
+                if (building.produce(entry.item(), boostedAmount, resolvedCapacity)) changed = true;
             }
 
             if (def.isTransformer() && def.transformEveryTicks > 0

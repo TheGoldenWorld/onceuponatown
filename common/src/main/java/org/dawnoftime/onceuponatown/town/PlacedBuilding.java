@@ -3,12 +3,15 @@ package org.dawnoftime.onceuponatown.town;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.LongArrayTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class PlacedBuilding {
@@ -18,6 +21,9 @@ public class PlacedBuilding {
     public final BoundingBox bb;
     // Rotation applied when this building was placed. NONE for saves that predate this field.
     public final Rotation rotation;
+    // World positions of obstacle blocks recorded at placement time for SITE_CLEARANCE quest verification.
+    // Populated only for terrain-matched buildings with obstacle_blocks defined. Empty otherwise.
+    public final List<BlockPos> obstaclePositions;
     // Per-instance production multiplier. 1.0 = normal. Set to 1.15 for orientation bootstrap buildings.
     private double instanceProductionMultiplier = 1.0;
     private int upgradeLevel = 0;
@@ -25,19 +31,20 @@ public class PlacedBuilding {
     private boolean herdFed = true;
     private final Map<Item, Integer> stock = new HashMap<>();
 
-    public PlacedBuilding(String defId, BlockPos worldPos, BoundingBox bb, Rotation rotation) {
+    public PlacedBuilding(String defId, BlockPos worldPos, BoundingBox bb, Rotation rotation, List<BlockPos> obstaclePositions) {
         this.defId = defId;
         this.worldPos = worldPos;
         this.bb = bb;
         this.rotation = rotation;
+        this.obstaclePositions = obstaclePositions != null ? List.copyOf(obstaclePositions) : List.of();
     }
 
-    // Called by TickScheduler - respects the per-item capacity cap
-    public void produce(ProductionEntry entry) {
-        int current = stock.getOrDefault(entry.item(), 0);
-        if (current < entry.capacityItems()) {
-            stock.put(entry.item(), Math.min(current + entry.amount(), entry.capacityItems()));
-        }
+    // Called by ProductionManager - clamps to per-building resolvedCapacity, returns true if any stock was added
+    public boolean produce(net.minecraft.world.item.Item item, int boostedAmount, int resolvedCapacity) {
+        int current = stock.getOrDefault(item, 0);
+        if (current >= resolvedCapacity) return false;
+        stock.put(item, Math.min(current + boostedAmount, resolvedCapacity));
+        return true;
     }
 
     // Called by TownInventory.removeStock() - drains up to requested amount
@@ -54,7 +61,6 @@ public class PlacedBuilding {
     }
 
     public int getStock(Item item) { return stock.getOrDefault(item, 0); }
-    public java.util.Set<Item> getStockedItems() { return stock.keySet(); }
     public String getDefId() { return defId; }
 
     public double getInstanceProductionMultiplier() { return instanceProductionMultiplier; }
@@ -107,6 +113,11 @@ public class PlacedBuilding {
             tag.put("BoundingBox", bbTag);
         }
         tag.putInt("Rotation", rotation.ordinal());
+        if (!obstaclePositions.isEmpty()) {
+            long[] longs = new long[obstaclePositions.size()];
+            for (int i = 0; i < obstaclePositions.size(); i++) longs[i] = obstaclePositions.get(i).asLong();
+            tag.putLongArray("ObstaclePositions", longs);
+        }
         if (instanceProductionMultiplier != 1.0)
             tag.putDouble("InstanceProductionMultiplier", instanceProductionMultiplier);
         if (upgradeLevel != 0)
@@ -130,7 +141,11 @@ public class PlacedBuilding {
         Rotation rotation = tag.contains("Rotation")
             ? Rotation.values()[tag.getInt("Rotation")]
             : Rotation.NONE;
-        PlacedBuilding b = new PlacedBuilding(defId, pos, bb, rotation);
+        List<BlockPos> obstaclePositions = new ArrayList<>();
+        if (tag.contains("ObstaclePositions")) {
+            for (long l : tag.getLongArray("ObstaclePositions")) obstaclePositions.add(BlockPos.of(l));
+        }
+        PlacedBuilding b = new PlacedBuilding(defId, pos, bb, rotation, obstaclePositions);
         if (tag.contains("InstanceProductionMultiplier"))
             b.instanceProductionMultiplier = tag.getDouble("InstanceProductionMultiplier");
         if (tag.contains("UpgradeLevel"))

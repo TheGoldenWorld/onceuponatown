@@ -7,6 +7,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
+import org.dawnoftime.onceuponatown.client.ClientSessionState;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -45,10 +47,6 @@ public class EraProgressDraggableWidget extends DraggableWidget {
         String orientationLabel,
         String iconItem,
         boolean prereqsMet,
-        int requiredWeight,
-        int currentWeight,
-        int maxWeight,
-        boolean weightMet,
         List<CostRow> resourceCost,
         int requiredResidents,
         int activeResidents,
@@ -75,6 +73,7 @@ public class EraProgressDraggableWidget extends DraggableWidget {
         this.pathOptions = new ArrayList<>(pathOptions);
         this.onAdvance = onAdvance;
         this.contentHeight = computeContentH(pathOptions);
+        this.selectedPathId = ClientSessionState.selectedEraPathId;
     }
 
     public void updateData(int currentEra, List<EraPathOption> pathOptions) {
@@ -93,10 +92,10 @@ public class EraProgressDraggableWidget extends DraggableWidget {
             boolean newResidentsMet = opt.requiredResidents() <= 0 || activeResidents >= opt.requiredResidents();
             boolean resourcesMet = opt.resourceCost().stream().allMatch(cr -> cr.have() >= cr.amount());
             boolean buildingsMet = opt.requiredBuildings().stream().allMatch(rb -> rb.have() >= rb.count());
-            boolean newPrereqsMet = opt.weightMet() && resourcesMet && newResidentsMet && buildingsMet;
+            boolean newPrereqsMet = resourcesMet && newResidentsMet && buildingsMet;
             updated.add(new EraPathOption(
                 opt.id(), opt.orientationLabel(), opt.iconItem(),
-                newPrereqsMet, opt.requiredWeight(), opt.currentWeight(), opt.maxWeight(), opt.weightMet(),
+                newPrereqsMet,
                 opt.resourceCost(), opt.requiredResidents(), activeResidents,
                 newResidentsMet, opt.requiredBuildings(), opt.unlocked()
             ));
@@ -110,7 +109,7 @@ public class EraProgressDraggableWidget extends DraggableWidget {
 
     private static int maxCondTextW(EraPathOption opt) {
         var font = Minecraft.getInstance().font;
-        int max = font.width(opt.currentWeight() + "/" + opt.maxWeight() + " weight");
+        int max = 0;
         for (CostRow cr : opt.resourceCost())
             max = Math.max(max, font.width(cr.have() + "/" + cr.amount() + " " + formatItemId(cr.itemId())));
         if (opt.requiredResidents() > 0)
@@ -142,7 +141,6 @@ public class EraProgressDraggableWidget extends DraggableWidget {
     private static int computeCardH(EraPathOption opt) {
         int h = CARD_PADDING;
         h += 10 + 8; // icon+name row + gap
-        h += 11;     // weight row
         h += opt.resourceCost().size() * 11;
         if (opt.requiredResidents() > 0) h += 11;
         h += opt.requiredBuildings().size() * 11;
@@ -261,10 +259,6 @@ public class EraProgressDraggableWidget extends DraggableWidget {
         int blockW = 4 + 3 + maxTW;
         int blockX = cx + (cw - blockW) / 2;
 
-        String weightText = opt.currentWeight() + "/" + opt.maxWeight() + " weight";
-        renderCondRow(g, font, blockX, rowY, weightText, opt.weightMet());
-        rowY += 11;
-
         for (CostRow cr : opt.resourceCost()) {
             String text = cr.have() + "/" + cr.amount() + " " + formatItemId(cr.itemId());
             renderCondRow(g, font, blockX, rowY, text, cr.have() >= cr.amount());
@@ -346,6 +340,7 @@ public class EraProgressDraggableWidget extends DraggableWidget {
                     int cardIdx = bb[4];
                     if (cardIdx < pathOptions.size()) {
                         selectedPathId = pathOptions.get(cardIdx).id();
+                        ClientSessionState.selectedEraPathId = selectedPathId;
                     }
                     return true;
                 }

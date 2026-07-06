@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import java.util.HashSet;
 import java.util.Set;
@@ -22,10 +23,23 @@ public class TerrainCarver {
     // Solid terrain blocks eligible for carving (Pass A) and replaceable by Pass B anchor fill.
     private static final Set<Block> CARVE_SET = Set.of(
             Blocks.GRASS_BLOCK, Blocks.DIRT, Blocks.COARSE_DIRT, Blocks.ROOTED_DIRT,
+            Blocks.OAK_LEAVES, Blocks.BIRCH_LEAVES, Blocks.SPRUCE_LEAVES,
+            Blocks.JUNGLE_LEAVES, Blocks.ACACIA_LEAVES, Blocks.DARK_OAK_LEAVES,
+            Blocks.OAK_LOG, Blocks.BIRCH_LOG,
             Blocks.PODZOL, Blocks.STONE, Blocks.ANDESITE, Blocks.DIORITE,
             Blocks.GRANITE, Blocks.DEEPSLATE, Blocks.TUFF, Blocks.GRAVEL,
             Blocks.SAND, Blocks.SANDSTONE, Blocks.RED_SAND, Blocks.RED_SANDSTONE,
-            Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE
+            Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE,
+            Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE,
+            Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE,
+            Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE,
+            Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE,
+            Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE,
+            Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE,
+            Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE,
+            Blocks.NETHER_GOLD_ORE, Blocks.NETHER_QUARTZ_ORE,
+            Blocks.CALCITE, Blocks.DRIPSTONE_BLOCK, Blocks.MUD,
+            Blocks.SNOW_BLOCK, Blocks.SNOW
     );
 
     // Natural surface clutter treated as replaceable terrain in Pass C outline fill.
@@ -293,6 +307,8 @@ public class TerrainCarver {
     // Carves solid terrain blocks and non-solid clutter inside the building interior volume.
     // Layer 0 (floorY) is never touched. Only columns in occupiedColumns are carved.
     // Columns in noTouchColumns (explicit structure_void) are also skipped as a secondary guard.
+    // Each column is carved up to the higher of (template ceiling) or (actual terrain surface),
+    // so buildings placed against hills carve through the full hillside rather than embedding.
     private static void carveInterior(ServerLevel level, int minX, int maxX, int minZ, int maxZ,
                                       int startY, int height, Set<Long> noTouchColumns, Set<Long> occupiedColumns) {
         for (int x = minX; x <= maxX; x++) {
@@ -300,7 +316,10 @@ public class TerrainCarver {
                 long col = packXZ(x, z);
                 if (noTouchColumns.contains(col)) continue;
                 if (!occupiedColumns.contains(col)) continue; // no NBT blocks above floor -> preserve terrain
-                for (int y = startY; y < startY + height; y++) {
+                int templateCeiling = startY + height;
+                int terrainSurface = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+                int carveCeiling = Math.max(templateCeiling, terrainSurface);
+                for (int y = startY; y < carveCeiling; y++) {
                     BlockPos pos = new BlockPos(x, y, z);
                     if (!level.isLoaded(pos)) continue;
                     BlockState state = level.getBlockState(pos);

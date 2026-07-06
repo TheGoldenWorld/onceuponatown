@@ -7,9 +7,12 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import org.dawnoftime.onceuponatown.Constants;
@@ -46,7 +49,6 @@ public class SimpleStateMachine {
     private final Npc npc;
     private State current = State.IDLE;
     private ActivityInstance currentActivity = null;
-    private int activityTravelTicks = 0;
     private int activityPerformTicks = 0;
     private int queueCursor = 0;
     private BuildTask activeBuild = null;
@@ -64,7 +66,8 @@ public class SimpleStateMachine {
     // -------------------------------------------------------------------------
     private enum FailReason {
         NO_COMPATIBLE_CONNECTOR, // candidate has no jigsaw connector matching the connection point pool
-        BOUNDING_BOX_OVERLAP     // computed BB intersects an already-occupied zone
+        BOUNDING_BOX_OVERLAP,    // computed BB intersects an already-occupied zone
+        WATER_IN_FOOTPRINT       // terrain scan detected open water under the placement footprint
     }
 
     private record PlacementSuccess(BlockPos pos, Rotation rotation, BlockPos entryConnectorWorldPos, BoundingBox bb) {}
@@ -260,21 +263,22 @@ public class SimpleStateMachine {
             int noConnector = 0;
 
             for (ConnectionPoint point : matchingCps) {
-                PlacementOutcome outcome = attemptPlacement(serverLevel, point, occupied, def);
+                ConnectionPoint corrected = correctConnectionPointY(serverLevel, point);
+                PlacementOutcome outcome = attemptPlacement(serverLevel, corrected, occupied, def);
                 if (outcome.succeeded()) {
                     PlacementSuccess s = outcome.success();
                     town.claimQueueEntry(i, myId);
                     town.useConnection(point);
                     LevelTowns.get(serverLevel).markDirty();
                     activeBuild = new BuildGoal(npc, new NewBuildAction(
-                        def, point, s.pos(), s.rotation(), s.entryConnectorWorldPos(), List.of(), town));
+                        def, corrected, s.pos(), s.rotation(), s.entryConnectorWorldPos(), List.of(), town));
                     if (s.bb() != null) town.addUnderConstruction(def.id, s.pos(), s.bb(), s.rotation());
                     activeQueueEntry = entry;
                     int mySlotQ = town.getBuilderSlot(myId);
                     if (mySlotQ >= 0) {
                         town.setActiveBuild(mySlotQ, new ActiveBuildState(
-                            def.id, s.pos(), s.rotation(), point.pos(), point.direction(),
-                            point.targetName(), s.entryConnectorWorldPos(), List.of(), defId, entry.entryId()));
+                            def.id, s.pos(), s.rotation(), corrected.pos(), corrected.direction(),
+                            corrected.targetName(), s.entryConnectorWorldPos(), List.of(), defId, entry.entryId()));
                         LevelTowns.get(serverLevel).markDirty();
                     }
                     current = State.BUILD;
@@ -330,34 +334,60 @@ public class SimpleStateMachine {
             return;
         }
 
-        // Try each street CP from oldest to newest; for each CP shuffle candidate road pieces
-        // so the road shape varies while the expansion direction stays age-ordered.
+        // Collect pools needed by currently blocked queue entries.
+        Set<String> neededPools = new HashSet<>();
+        for (QueueEntry entry : town.getConstructionQueue()) {
+            if (entry instanceof QueueEntry.NewBuild nb) {
+                BuildingDataHandler.get(nb.defId()).ifPresent(def -> {
+                    if (!def.entryPool.isEmpty()) neededPools.add(def.entryPool);
+                });
+            }
+        }
+
+        // Prefer roads that expose at least one connector matching a needed pool.
+        // Everything else goes to fallback so placement is never blocked by this filter.
+        List<BuildingDef> preferred = new ArrayList<>();
+        List<BuildingDef> fallback  = new ArrayList<>();
+        for (BuildingDef c : streetCandidates) {
+            if (offersNeededConnector(serverLevel, c, neededPools)) {
+                preferred.add(c);
+            } else {
+                fallback.add(c);
+            }
+        }
+
+        // Try each street CP from oldest to newest. Pass 0 = preferred, pass 1 = fallback safety net.
         for (ConnectionPoint chosen : streetCps) {
-            shuffleInPlace(streetCandidates);
-            for (BuildingDef candidate : streetCandidates) {
-                PlacementOutcome outcome = attemptPlacement(serverLevel, chosen, occupied, candidate);
-                if (outcome.succeeded()) {
-                    PlacementSuccess s = outcome.success();
-                    town.useConnection(chosen);
-                    LevelTowns.get(serverLevel).markDirty();
-                    activeBuild = new BuildGoal(npc, new NewBuildAction(
-                        candidate, chosen, s.pos(), s.rotation(), s.entryConnectorWorldPos(),
-                        candidate.constructionCost, town));
-                    if (s.bb() != null) town.addUnderConstruction(candidate.id, s.pos(), s.bb(), s.rotation());
-                    int mySlot = town.getBuilderSlot(npc.getUUID());
-                    if (mySlot >= 0) {
-                        town.setActiveBuild(mySlot, new ActiveBuildState(
-                            candidate.id, s.pos(), s.rotation(), chosen.pos(), chosen.direction(),
-                            chosen.targetName(), s.entryConnectorWorldPos(), candidate.constructionCost, null, -1L));
+            ConnectionPoint correctedChosen = correctConnectionPointY(serverLevel, chosen);
+            for (int pass = 0; pass < 2; pass++) {
+                List<BuildingDef> batch = (pass == 0) ? preferred : fallback;
+                if (batch.isEmpty()) continue;
+                shuffleInPlace(batch);
+                for (BuildingDef candidate : batch) {
+                    PlacementOutcome outcome = attemptPlacement(serverLevel, correctedChosen, occupied, candidate);
+                    if (outcome.succeeded()) {
+                        PlacementSuccess s = outcome.success();
+                        town.useConnection(chosen);
                         LevelTowns.get(serverLevel).markDirty();
+                        activeBuild = new BuildGoal(npc, new NewBuildAction(
+                            candidate, correctedChosen, s.pos(), s.rotation(), s.entryConnectorWorldPos(),
+                            candidate.constructionCost, town));
+                        if (s.bb() != null) town.addUnderConstruction(candidate.id, s.pos(), s.bb(), s.rotation());
+                        int mySlot = town.getBuilderSlot(npc.getUUID());
+                        if (mySlot >= 0) {
+                            town.setActiveBuild(mySlot, new ActiveBuildState(
+                                candidate.id, s.pos(), s.rotation(), correctedChosen.pos(), correctedChosen.direction(),
+                                correctedChosen.targetName(), s.entryConnectorWorldPos(), candidate.constructionCost, null, -1L));
+                            LevelTowns.get(serverLevel).markDirty();
+                        }
+                        current = State.BUILD;
+                        TownLogEntry streetStartLog = new TownLogEntry(TownLogType.BUILD_START, candidate.id, serverLevel.getGameTime());
+                        town.addLogEntry(streetStartLog);
+                        LevelTowns.get(serverLevel).markDirty();
+                        NetworkHelper.pushLogEntryToWatchers(serverLevel, town, npc.getTownAnchorPos(), streetStartLog);
+                        NetworkHelper.pushBuildingListToWatchers(serverLevel, town, npc.getTownAnchorPos());
+                        return;
                     }
-                    current = State.BUILD;
-                    TownLogEntry streetStartLog = new TownLogEntry(TownLogType.BUILD_START, candidate.id, serverLevel.getGameTime());
-                    town.addLogEntry(streetStartLog);
-                    LevelTowns.get(serverLevel).markDirty();
-                    NetworkHelper.pushLogEntryToWatchers(serverLevel, town, npc.getTownAnchorPos(), streetStartLog);
-                    NetworkHelper.pushBuildingListToWatchers(serverLevel, town, npc.getTownAnchorPos());
-                    return;
                 }
             }
         }
@@ -368,6 +398,19 @@ public class SimpleStateMachine {
             LevelTowns.get(serverLevel).markDirty();
             NetworkHelper.pushLogEntryToWatchers(serverLevel, town, npc.getTownAnchorPos(), fullLog);
         }
+    }
+
+    // Returns true if the road candidate has at least one non-terminator connector
+    // whose target pool matches one of the pools needed by blocked queue entries.
+    private boolean offersNeededConnector(ServerLevel level, BuildingDef road, Set<String> neededPools) {
+        if (neededPools.isEmpty()) return false;
+        for (JigsawConnector c : BuildSchematic.readConnectors(level, road.nbt)) {
+            if (!c.pool().isEmpty() && !c.pool().equals("minecraft:empty")
+                    && neededPools.contains(c.target())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Attempts to find a valid placement for a building at a given connection point.
@@ -394,7 +437,9 @@ public class SimpleStateMachine {
         shuffleInPlace(shuffled);
 
         BlockPos attachPoint = point.pos().relative(point.direction());
-        int terrainY = BuildSchematic.findGroundY(serverLevel, attachPoint);
+        int terrainY = def.terrainMatching ? BuildSchematic.findGroundY(serverLevel, attachPoint) : 0;
+
+        int waterBlocked = 0;
 
         for (JigsawConnector chosen : shuffled) {
             Rotation rotation = BuildSchematic.computeRequiredRotation(
@@ -402,12 +447,23 @@ public class SimpleStateMachine {
             BlockPos rawPos = BuildSchematic.computeCandidatePosition(
                 point.pos(), point.direction(), chosen.posInTemplate(), rotation);
 
-            int finalY = terrainY - chosen.posInTemplate().getY();
+            // For terrain-matching (roads): anchor Y to ground level at the attach point.
+            // For regular buildings: use rawPos.getY() directly -- it already encodes the correct
+            // world Y so the entry connector lands exactly on the parent connection point.
+            int finalY = def.terrainMatching
+                ? terrainY - chosen.posInTemplate().getY()
+                : rawPos.getY();
             BlockPos finalPos = new BlockPos(rawPos.getX(), finalY, rawPos.getZ());
 
             Optional<BoundingBox> maybeBb = def.terrainMatching
                 ? BuildSchematic.computeFootprintBoundingBox(serverLevel, finalPos, def.nbt, rotation)
                 : BuildSchematic.computeBoundingBox(serverLevel, finalPos, def.nbt, rotation);
+
+            if (BuildSchematic.footprintContainsWater(serverLevel, finalPos, def.nbt, rotation)) {
+                waterBlocked++;
+                continue;
+            }
+
             if (maybeBb.isPresent()) {
                 BoundingBox cb = maybeBb.get();
                 boolean overlaps = occupied.stream().anyMatch(bb ->
@@ -420,7 +476,15 @@ public class SimpleStateMachine {
             BlockPos entryConnectorWorldPos = finalPos.offset(
                 StructureTemplate.transform(chosen.posInTemplate(), Mirror.NONE, rotation, BlockPos.ZERO));
 
+            LOGGER.info("[PLACEMENT] building={} parentConnector={}(dir={}) entryLocalPos={} rotation={} rawPos={} finalPos={} entryConnectorWorld={}",
+                def.id, point.pos(), point.direction(), chosen.posInTemplate(), rotation,
+                rawPos, finalPos, entryConnectorWorldPos);
+
             return PlacementOutcome.ok(finalPos, rotation, entryConnectorWorldPos, maybeBb.orElse(null));
+        }
+
+        if (waterBlocked > 0 && waterBlocked == shuffled.size()) {
+            return PlacementOutcome.fail(FailReason.WATER_IN_FOOTPRINT);
         }
 
         return PlacementOutcome.fail(FailReason.BOUNDING_BOX_OVERLAP);
@@ -447,9 +511,6 @@ public class SimpleStateMachine {
         ActivityDef def = candidateDefs.get(idx);
         PlacedBuilding building = candidateBuildings.get(idx);
 
-        LOGGER.info("[OUAT-ACTIVITY] tryStartActivity: activity={} building={} buildingRef={}",
-            def.animationType(), building.defId, System.identityHashCode(building));
-
         BoundingBox bb = building.bb;
         BlockPos target = new BlockPos(
             (bb.minX() + bb.maxX()) / 2,
@@ -463,7 +524,6 @@ public class SimpleStateMachine {
             BuiltInRegistries.ITEM.getOptional(new ResourceLocation(def.heldItem()))
                 .ifPresent(item -> npc.holdInMainHand(new ItemStack(item)));
         }
-        activityTravelTicks = 0;
         activityPerformTicks = 0;
         current = State.ACTIVITY;
     }
@@ -473,25 +533,33 @@ public class SimpleStateMachine {
         Town town = findTown(serverLevel);
 
         if (town == null) {
-            LOGGER.info("[OUAT-ACTIVITY] tickActivity: town is null, cancelling activity");
             cancelActivity();
             current = State.IDLE;
             return;
         }
-        // Only interrupt activity when there is unclaimed work available for this builder.
-        // If every queued entry is held by another builder, keep doing the activity.
+        // Interrupt only when there is actionable work: an upgrade (no prerequisites) or a
+        // NewBuild whose prerequisites are currently met. Entries blocked by prerequisites are
+        // not treated as actionable so they don't cause an IDLE/ACTIVITY flicker loop.
         if (!town.getConstructionQueue().isEmpty()) {
             UUID myId = npc.getUUID();
             List<QueueEntry> queue = town.getConstructionQueue();
             boolean hasUnclaimedWork = false;
             for (int i = 0; i < queue.size(); i++) {
-                if (!town.isQueueEntryClaimedByOther(i, myId)) {
+                if (town.isQueueEntryClaimedByOther(i, myId)) continue;
+                QueueEntry entry = queue.get(i);
+                if (entry instanceof QueueEntry.Upgrade) {
                     hasUnclaimedWork = true;
                     break;
                 }
+                if (entry instanceof QueueEntry.NewBuild nb) {
+                    Optional<BuildingDef> maybeDef = BuildingDataHandler.get(nb.defId());
+                    if (maybeDef.isPresent() && town.meetsPrerequisites(maybeDef.get())) {
+                        hasUnclaimedWork = true;
+                        break;
+                    }
+                }
             }
             if (hasUnclaimedWork) {
-                LOGGER.info("[OUAT-ACTIVITY] tickActivity: unclaimed work found, interrupting activity");
                 cancelActivity();
                 current = State.IDLE;
                 return;
@@ -504,11 +572,6 @@ public class SimpleStateMachine {
             if (b == currentActivity.targetBuilding) { buildingFound = true; break; }
         }
         if (!buildingFound) {
-            LOGGER.warn("[OUAT-ACTIVITY] tickActivity: building {} (ref={}) not found in town list (list size={}, phase={}), cancelling",
-                currentActivity.targetBuilding.defId,
-                System.identityHashCode(currentActivity.targetBuilding),
-                currentBuildings.size(),
-                currentActivity.phase);
             cancelActivity();
             current = State.IDLE;
             return;
@@ -522,26 +585,16 @@ public class SimpleStateMachine {
     }
 
     private void tickTraveling(ServerLevel serverLevel) {
-        activityTravelTicks++;
-        if (activityTravelTicks > BuilderConfigDataHandler.get().movingTimeoutTicks) {
-            cancelActivity();
-            current = State.IDLE;
-            return;
-        }
         boolean arrived = currentActivity.goToPosition.tick();
         if (!arrived) return;
 
         npc.getNavigation().stop();
-        activityTravelTicks = 0;
 
         String targetBlockId = currentActivity.def.targetBlock();
         if (targetBlockId == null) {
-            LOGGER.info("[OUAT-ACTIVITY] TRAVELING -> PERFORMING (no targetBlock), activity={}", currentActivity.def.animationType());
             currentActivity.phase = ActivityInstance.Phase.PERFORMING;
             return;
         }
-        LOGGER.info("[OUAT-ACTIVITY] TRAVELING -> scanning for block={}", targetBlockId);
-
         // Scan the building's bounding box for the closest matching block.
         Block block = BuiltInRegistries.BLOCK.getOptional(new ResourceLocation(targetBlockId)).orElse(null);
         if (block == null) {
@@ -569,30 +622,20 @@ public class SimpleStateMachine {
         }
 
         if (found == null) {
-            LOGGER.warn("[OUAT-ACTIVITY] TRAVELING: target block not found in building BB, cancelling");
             cancelActivity();
             current = State.IDLE;
             return;
         }
 
-        LOGGER.info("[OUAT-ACTIVITY] TRAVELING -> APPROACHING, found block at {}", found);
         currentActivity.approachTargetPos = found;
         currentActivity.approachGoTo = new GoToPosition(npc, found, BuilderConfigDataHandler.get().walkSpeed, 1.5);
         currentActivity.phase = ActivityInstance.Phase.APPROACHING;
     }
 
     private void tickApproaching(ServerLevel serverLevel) {
-        activityTravelTicks++;
-        if (activityTravelTicks > BuilderConfigDataHandler.get().movingTimeoutTicks) {
-            cancelActivity();
-            current = State.IDLE;
-            return;
-        }
         boolean arrived = currentActivity.approachGoTo.tick();
         if (arrived) {
             npc.getNavigation().stop();
-            activityTravelTicks = 0;
-            LOGGER.info("[OUAT-ACTIVITY] APPROACHING -> PERFORMING, activity={}", currentActivity.def.animationType());
             currentActivity.phase = ActivityInstance.Phase.PERFORMING;
         }
     }
@@ -629,12 +672,9 @@ public class SimpleStateMachine {
 
     private void cancelActivity() {
         if (currentActivity == null) return;
-        LOGGER.info("[OUAT-ACTIVITY] cancelActivity: phase={} activity={} performTicks={}",
-            currentActivity.phase, currentActivity.def.animationType(), activityPerformTicks);
         npc.freeHands();
         npc.getNavigation().stop();
         currentActivity = null;
-        activityTravelTicks = 0;
         activityPerformTicks = 0;
     }
 
@@ -701,6 +741,27 @@ public class SimpleStateMachine {
             activeBuild = null;
             current = State.IDLE;
         }
+    }
+
+    private static ConnectionPoint correctConnectionPointY(ServerLevel level, ConnectionPoint point) {
+        if (!level.isLoaded(point.pos())) return point;
+        int wx = point.pos().getX(), wz = point.pos().getZ();
+        int scanStart = level.getHeight(Heightmap.Types.WORLD_SURFACE, wx, wz) - 1;
+        if (scanStart < 0) return point;
+        for (int y = scanStart; y >= level.getMinBuildHeight(); y--) {
+            BlockState bs = level.getBlockState(new BlockPos(wx, y, wz));
+            // Stop on the first solid, non-vegetation block. Jigsaw is explicitly included
+            // as a stop target: vanilla roads leave jigsaw in the world at road surface level,
+            // and skipping it (like SCAN_IGNORE_BLOCKS does) would give Y - 1.
+            if (!bs.isAir() && (!BuildSchematic.SCAN_IGNORE_BLOCKS.contains(bs.getBlock()) || bs.is(Blocks.JIGSAW))) {
+                if (y == point.pos().getY()) return point;
+                return new ConnectionPoint(
+                    new BlockPos(wx, y, wz),
+                    point.direction(), point.targetName(), point.insertionOrder()
+                );
+            }
+        }
+        return point;
     }
 
     private Town findTown(ServerLevel level) {

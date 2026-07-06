@@ -1,0 +1,11 @@
+{
+  "id": "onceuponatown:remaining_trunks",
+  "type": "SITE_CLEARANCE",
+  "title": "quest.onceuponatown.remaining_trunks.title",
+  "description": "quest.onceuponatown.remaining_trunks.desc",
+  "target_building_def_id": "street_10",
+  "prerequisites": {
+    "required_buildings": ["street_10"]
+  },
+  "reward": { "type": "PLAYER", "item": "minecraft:emerald", "amount": 2 }
+}

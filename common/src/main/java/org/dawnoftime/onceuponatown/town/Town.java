@@ -93,8 +93,8 @@ public class Town {
     // Allows sorting by insertion age: lower = older = closer to the village center.
     private long cpInsertionCounter = 0;
 
-    public void registerBuilding(BlockPos worldPos, String defId, List<ConnectionPoint> connections, BoundingBox bb, Rotation rotation) {
-        buildings.add(new PlacedBuilding(defId, worldPos, bb, rotation));
+    public void registerBuilding(BlockPos worldPos, String defId, List<ConnectionPoint> connections, BoundingBox bb, Rotation rotation, List<BlockPos> obstaclePositions) {
+        buildings.add(new PlacedBuilding(defId, worldPos, bb, rotation, obstaclePositions));
         for (ConnectionPoint cp : connections) {
             freeConnections.add(new ConnectionPoint(cp.pos(), cp.direction(), cp.targetName(), cpInsertionCounter++));
         }
@@ -233,18 +233,10 @@ public class Town {
         return "";
     }
 
-    // Computes the effective minimum weight for a transition, respecting min_weight_percent if set.
-    public int effectiveMinWeight(EraTransitionDef t) {
-        if (t.minWeightPercent > 0) {
-            return (int) Math.round(t.minWeightPercent / 100.0 * currentMaxWeight);
-        }
-        return 0;
-    }
-
     // Returns true if all prereqs for the given era transition are satisfied.
     public boolean meetsEraTransitionPrereqs(EraTransitionDef t) {
         int w = getCurrentWeight();
-        if (w < effectiveMinWeight(t) || w > getCurrentMaxWeight()) return false;
+        if (w > getCurrentMaxWeight()) return false;
         if (t.requiredResidents > 0 && activeResidents < t.requiredResidents) return false;
         for (BuildingDef.BuildingRequirement req : t.requiredBuildings) {
             long count = buildings.stream().filter(b -> b.defId.equals(req.defId())).count();
@@ -607,7 +599,18 @@ public class Town {
             return true;
         });
         int sizeBefore = questDefLastCompleted.size();
-        questDefLastCompleted.keySet().retainAll(validDefIds);
+        // SITE_CLEARANCE keys use the format "defId:worldPosLong" -- extract the base defId
+        // by stripping the trailing ":digits" segment before checking against validDefIds.
+        questDefLastCompleted.keySet().removeIf(key -> {
+            if (validDefIds.contains(key)) return false;
+            int lastColon = key.lastIndexOf(':');
+            if (lastColon > 0) {
+                String suffix = key.substring(lastColon + 1);
+                String baseId = key.substring(0, lastColon);
+                if (suffix.matches("-?\\d+") && validDefIds.contains(baseId)) return false;
+            }
+            return true;
+        });
         return changed || questDefLastCompleted.size() != sizeBefore;
     }
 

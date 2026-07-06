@@ -20,6 +20,12 @@
 
     { "item": "minecraft:cobblestone",        "buy": 2, "sell": 1, "quantity": 25 },
     { "item": "minecraft:stone",              "buy": 3, "sell": 2, "quantity": 15 },
+    { "item": "minecraft:gravel",             "buy": 4, "sell": 2, "quantity": 10 },
+
+    { "item": "minecraft:andesite",           "buy": 3, "sell": 2, "quantity": 35 },
+    { "item": "minecraft:diorite",            "buy": 3, "sell": 2, "quantity": 35 },
+    { "item": "minecraft:granite",            "buy": 3, "sell": 2, "quantity": 35 },
+    { "item": "minecraft:tuff",               "buy": 3, "sell": 2, "quantity": 25 },
 
     { "item": "minecraft:oak_sapling",        "buy": 2, "sell": 1, "quantity": 45 },
 

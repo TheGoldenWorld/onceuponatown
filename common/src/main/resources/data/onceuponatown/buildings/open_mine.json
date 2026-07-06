@@ -1,0 +1,125 @@
+{
+  "id": "open_mine",
+  "nbt": "onceuponatown:plains/jobs/open_mine",
+  "entry_pool": "onceuponatown:jobs",
+  "icon_item": "minecraft:blast_furnace",
+  "category": "jobs",
+  "weight": 4,
+
+
+
+  "construction_cost": [
+    {
+      "item": "minecraft:oak_log",
+      "amount": 45
+    },
+    {
+      "item": "minecraft:cobblestone",
+      "amount": 35
+    }
+  ],
+  "production": [
+    {
+      "item": "minecraft:cobblestone",
+      "amount": 3,
+      "every_ticks": 1800,
+      "capacity_stacks": 1
+    },
+    {
+      "item": "minecraft:granite",
+      "amount": 1,
+      "every_ticks": 2200,
+      "capacity_stacks": 1
+    },
+    {
+      "item": "minecraft:andesite",
+      "amount": 1,
+      "every_ticks": 2200,
+      "capacity_stacks": 1
+    },
+    {
+      "item": "minecraft:diorite",
+      "amount": 1,
+      "every_ticks": 2200,
+      "capacity_stacks": 1
+    },
+    {
+      "item": "minecraft:tuff",
+      "amount": 1,
+      "every_ticks": 2200,
+      "capacity_stacks": 1
+    },
+    {
+      "item": "minecraft:gravel",
+      "amount": 1,
+      "every_ticks": 2000,
+      "capacity_stacks": 1,
+      "unlock_at_level": 3
+    },
+    {
+      "item": "minecraft:flint",
+      "amount": 1,
+      "every_ticks": 2400,
+      "capacity_stacks": 1,
+      "unlock_at_level": 3
+    },
+    {
+      "item": "minecraft:coal",
+      "amount": 1,
+      "every_ticks": 3100,
+      "capacity_stacks": 1,
+      "unlock_at_level": 6
+    }
+  ],
+  "transform_input_ratio": 0.1,
+  "transform_every_ticks": 1600,
+  "transformations": [
+    {
+      "inputs": [
+        { "item": "minecraft:cobblestone", "amount": 3 },
+        { "item": "minecraft:charcoal", "amount": 1 }
+      ],
+      "output": "minecraft:stone",
+      "output_amount": 3,
+      "output_capacity_stacks": 1,
+      "unlock_at_level": 1
+    }
+  ],
+  "upgrades": [
+    {
+      "capacity_stacks_add": 1,
+      "unlocks_display": ["minecraft:stone"],
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 20 }]
+    },
+    {
+      "amount_add": 1,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 30 }]
+    },
+    {
+      "capacity_stacks_add": 1,
+      "unlocks_display": ["minecraft:gravel", "minecraft:flint"],
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 40 }]
+    },
+    {
+      "cadence_multiplier": 0.10,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 60 }]
+    },
+    {
+      "amount_add": 1,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 80 }]
+    },
+    {
+      "cadence_multiplier": 0.20,
+      "unlocks_display": ["minecraft:coal"],
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 100 }]
+    }
+  ],
+  "nbt_levels": [
+    "onceuponatown:plains/jobs/open_mine_lvl1",
+    "onceuponatown:plains/jobs/open_mine_lvl2",
+    "onceuponatown:plains/jobs/open_mine_lvl3",
+    "onceuponatown:plains/jobs/open_mine_lvl4",
+    "onceuponatown:plains/jobs/open_mine_lvl5",
+    "onceuponatown:plains/jobs/open_mine_lvl6"
+  ]
+}

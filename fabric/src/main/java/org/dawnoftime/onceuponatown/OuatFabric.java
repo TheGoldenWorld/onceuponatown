@@ -25,6 +25,7 @@ import org.dawnoftime.onceuponatown.network.C2SAdvanceEraPacket;
 import org.dawnoftime.onceuponatown.network.C2SBuyPacket;
 import org.dawnoftime.onceuponatown.network.C2SDepositPacket;
 import org.dawnoftime.onceuponatown.network.C2SContributeQuestPacket;
+import org.dawnoftime.onceuponatown.network.C2SVerifyClearancePacket;
 import org.dawnoftime.onceuponatown.network.C2SQueueBuildingPacket;
 import org.dawnoftime.onceuponatown.network.C2SRemoveQueuedBuildingPacket;
 import org.dawnoftime.onceuponatown.network.C2SRequestStockPacket;
@@ -102,6 +103,11 @@ public class OuatFabric implements ModInitializer {
             (server, player, handler, buf, responseSender) -> {
                 C2SContributeQuestPacket packet = C2SContributeQuestPacket.decode(buf);
                 server.execute(() -> C2SContributeQuestPacket.Handler.handle(packet, player));
+            });
+        ServerPlayNetworking.registerGlobalReceiver(C2SVerifyClearancePacket.ID,
+            (server, player, handler, buf, responseSender) -> {
+                C2SVerifyClearancePacket packet = C2SVerifyClearancePacket.decode(buf);
+                server.execute(() -> C2SVerifyClearancePacket.Handler.handle(packet, player));
             });
         ServerPlayNetworking.registerGlobalReceiver(C2SRequestStockPacket.ID,
             (server, player, handler, buf, responseSender) -> {

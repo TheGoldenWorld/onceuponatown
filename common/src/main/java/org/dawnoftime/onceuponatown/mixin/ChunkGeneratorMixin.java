@@ -1,6 +1,7 @@
 package org.dawnoftime.onceuponatown.mixin;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -127,10 +128,29 @@ public class ChunkGeneratorMixin {
 
             // Pass 2: a connection is free only if no peer jigsaw block sits one step ahead
             for (PieceEntry entry : entries) {
+                BuildingDef def = BuildingDataHandler.get(entry.defId()).get();
+
                 List<ConnectionPoint> free = entry.allPoints().stream()
                     .filter(cp -> !allJigsawPositions.contains(cp.pos().relative(cp.direction())))
                     .toList();
-                town.registerBuilding(entry.origin(), entry.defId(), free, entry.pieceBb(), entry.rotation());
+
+                // For terrain-matched pieces with obstacle block definitions, the NBT-computed positions
+                // are wrong for the same Y reason. Locate real obstacle positions by scanning the
+                // actual bounding box in the world.
+                List<BlockPos> obstacles = java.util.List.of();
+                if (def.terrainMatching && !def.obstacleBlocks.isEmpty()) {
+                    List<BlockPos> found = new ArrayList<>();
+                    BoundingBox bb = entry.pieceBb();
+                    for (BlockPos pos : BlockPos.betweenClosed(bb.minX(), bb.minY(), bb.minZ(),
+                                                               bb.maxX(), bb.maxY(), bb.maxZ())) {
+                        String blockId = BuiltInRegistries.BLOCK
+                            .getKey(serverLevel.getBlockState(pos).getBlock()).toString();
+                        if (def.obstacleBlocks.contains(blockId)) found.add(pos.immutable());
+                    }
+                    obstacles = found;
+                }
+
+                town.registerBuilding(entry.origin(), entry.defId(), free, entry.pieceBb(), entry.rotation(), obstacles);
             }
 
             // Pass 3: pieces with no building def (vanilla pieces, unrecognized jigsaw elements) are not

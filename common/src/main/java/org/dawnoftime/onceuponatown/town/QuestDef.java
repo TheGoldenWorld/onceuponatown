@@ -10,7 +10,8 @@ public record QuestDef(
     List<ConditionTemplate> conditions,
     RewardTemplate reward,
     long refreshIntervalTicks,
-    Prerequisites prerequisites
+    Prerequisites prerequisites,
+    String targetBuildingDefId    // defId of the building whose BB is scanned; null for non-clearance quests
 ) {
     public record ConditionTemplate(String type, String item, int required, boolean sendToStock) {}
     public record RewardTemplate(String type, String item, int amount) {}

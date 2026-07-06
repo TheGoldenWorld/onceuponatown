@@ -42,8 +42,9 @@ public class QuestHubWidget extends DraggableWidget {
 
     private BlockPos anchorPos = BlockPos.ZERO;
 
-    private record CondRow(String type, String itemId, int required) {
+    private record CondRow(String type, String itemId, int required, boolean verified, String blockId) {
         boolean isMet() {
+            if ("CLEARANCE_BLOCK".equals(type)) return verified;
             if (!"DELIVERY".equals(type)) return true;
             return countInInventory() >= required;
         }
@@ -101,8 +102,11 @@ public class QuestHubWidget extends DraggableWidget {
             tag.getList("Conditions", Tag.TAG_COMPOUND).forEach(t -> {
                 CompoundTag ct = (CompoundTag) t;
                 conds.add(new CondRow(
-                    ct.getString("Type"), ct.getString("Item"),
-                    ct.getInt("Required")
+                    ct.getString("Type"),
+                    ct.getString("Item"),
+                    ct.getInt("Required"),
+                    ct.contains("Verified") && ct.getBoolean("Verified"),
+                    ct.contains("BlockId") ? ct.getString("BlockId") : null
                 ));
             });
             QuestRow row = new QuestRow(
@@ -137,9 +141,11 @@ public class QuestHubWidget extends DraggableWidget {
         int descH = descLines * 9;
         if ("NOTE".equals(qr.questType())) {
             return TITLE_BAR_CARD_H + PAD + descH + PAD;
-        } else {
-            return TITLE_BAR_CARD_H + PAD + descH + PAD + qr.conditions().size() * COND_H + PAD + BTN_H + PAD;
         }
+        if ("SITE_CLEARANCE".equals(qr.questType())) {
+            return TITLE_BAR_CARD_H + PAD + descH + PAD + qr.conditions().size() * COND_H + PAD + BTN_H + PAD + BTN_H + PAD;
+        }
+        return TITLE_BAR_CARD_H + PAD + descH + PAD + qr.conditions().size() * COND_H + PAD + BTN_H + PAD;
     }
 
     // -------------------------------------------------------------------------
@@ -288,6 +294,18 @@ public class QuestHubWidget extends DraggableWidget {
         }
         lineY += PAD;
 
+        if ("SITE_CLEARANCE".equals(qr.questType())) {
+            int btnW = cwm - 10;
+            boolean verifyHover = mx >= cxm + PAD && mx < cxm + PAD + btnW
+                               && my >= lineY     && my < lineY + BTN_H;
+            g.fill(cxm + PAD, lineY, cxm + PAD + btnW, lineY + BTN_H,
+                verifyHover ? 0xFF446699 : 0xFF335588);
+            String verifyText = Component.translatable("onceuponatown.quest.verify").getString();
+            g.drawString(font, verifyText,
+                cxm + PAD + (btnW - font.width(verifyText)) / 2, lineY + 2, 0xFFCCDDFF, false);
+            lineY += BTN_H + PAD;
+        }
+
         // Contribute button: green when all conditions met, gray otherwise
         int btnW = cwm - 10;
         boolean btnHover = allMet && mx >= cxm + PAD && mx < cxm + PAD + btnW
@@ -300,7 +318,14 @@ public class QuestHubWidget extends DraggableWidget {
     }
 
     private static String condText(CondRow cond) {
-        if ("DELIVERY".equals(cond.type())) {
+        if ("CLEARANCE_BLOCK".equals(cond.type())) {
+            String blockId = cond.blockId();
+            String name = blockId != null && blockId.contains(":")
+                ? formatId(blockId.substring(blockId.indexOf(':') + 1))
+                : formatId(blockId != null ? blockId : "");
+            return name;
+        }
+if ("DELIVERY".equals(cond.type())) {
             int have = Math.min(cond.countInInventory(), cond.required());
             String name = formatId(cond.itemId().contains(":")
                 ? cond.itemId().substring(cond.itemId().indexOf(':') + 1) : cond.itemId());
@@ -359,14 +384,33 @@ public class QuestHubWidget extends DraggableWidget {
 
             if (!"NOTE".equals(qr.questType())) {
                 int descLines = font.split(Component.translatable(qr.descKey()), contentW - CARD_MARGIN * 2 - 10).size();
-                int btnY = cardAbsY + TITLE_BAR_CARD_H + PAD + descLines * 9 + PAD
-                    + qr.conditions().size() * COND_H + PAD;
                 int btnW = contentW - CARD_MARGIN * 2 - 10;
-                if (mouseX >= x + CARD_MARGIN + PAD && mouseX < x + CARD_MARGIN + PAD + btnW
-                        && mouseY >= btnY && mouseY < btnY + BTN_H) {
-                    boolean allMet = qr.conditions().stream().allMatch(CondRow::isMet);
-                    if (allMet) NetworkHelper.sendContributeQuestPacket.accept(anchorPos, qr.questId());
-                    return true;
+                int btnLeft = x + CARD_MARGIN + PAD;
+
+                if ("SITE_CLEARANCE".equals(qr.questType())) {
+                    int verifyBtnY = cardAbsY + TITLE_BAR_CARD_H + PAD + descLines * 9 + PAD
+                        + qr.conditions().size() * COND_H + PAD;
+                    int claimBtnY = verifyBtnY + BTN_H + PAD;
+                    if (mouseX >= btnLeft && mouseX < btnLeft + btnW
+                            && mouseY >= verifyBtnY && mouseY < verifyBtnY + BTN_H) {
+                        NetworkHelper.sendVerifyClearancePacket.accept(anchorPos, qr.questId());
+                        return true;
+                    }
+                    if (mouseX >= btnLeft && mouseX < btnLeft + btnW
+                            && mouseY >= claimBtnY && mouseY < claimBtnY + BTN_H) {
+                        boolean allMet = qr.conditions().stream().allMatch(CondRow::isMet);
+                        if (allMet) NetworkHelper.sendContributeQuestPacket.accept(anchorPos, qr.questId());
+                        return true;
+                    }
+                } else {
+                    int btnY = cardAbsY + TITLE_BAR_CARD_H + PAD + descLines * 9 + PAD
+                        + qr.conditions().size() * COND_H + PAD;
+                    if (mouseX >= btnLeft && mouseX < btnLeft + btnW
+                            && mouseY >= btnY && mouseY < btnY + BTN_H) {
+                        boolean allMet = qr.conditions().stream().allMatch(CondRow::isMet);
+                        if (allMet) NetworkHelper.sendContributeQuestPacket.accept(anchorPos, qr.questId());
+                        return true;
+                    }
                 }
             }
 

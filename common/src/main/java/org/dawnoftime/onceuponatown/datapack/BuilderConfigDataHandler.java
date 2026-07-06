@@ -29,8 +29,6 @@ public class BuilderConfigDataHandler {
         public final int burstPauseMinTicks;
         public final int burstPauseMaxTicks;
         public final int maxBurstExtraBlocks;
-        public final int stuckFallbackTicks;
-        public final int movingTimeoutTicks;
         public final float planReadChance;
         public final int planReadMinTicks;
         public final int planReadMaxTicks;
@@ -38,7 +36,6 @@ public class BuilderConfigDataHandler {
 
         public Config(double walkSpeed, double blockReachDistance, int blockDelayTicks,
                       int burstPauseMinTicks, int burstPauseMaxTicks, int maxBurstExtraBlocks,
-                      int stuckFallbackTicks, int movingTimeoutTicks,
                       float planReadChance, int planReadMinTicks, int planReadMaxTicks,
                       List<ActivityDef> secondaryActivities) {
             this.walkSpeed = walkSpeed;
@@ -47,8 +44,6 @@ public class BuilderConfigDataHandler {
             this.burstPauseMinTicks = burstPauseMinTicks;
             this.burstPauseMaxTicks = burstPauseMaxTicks;
             this.maxBurstExtraBlocks = maxBurstExtraBlocks;
-            this.stuckFallbackTicks = stuckFallbackTicks;
-            this.movingTimeoutTicks = movingTimeoutTicks;
             this.planReadChance = planReadChance;
             this.planReadMinTicks = planReadMinTicks;
             this.planReadMaxTicks = planReadMaxTicks;
@@ -57,7 +52,7 @@ public class BuilderConfigDataHandler {
     }
 
     private static final Config DEFAULTS = new Config(
-        0.6, 6.0, 4, 10, 18, 2, 100, 3600, 0.05f, 15, 35, List.of()
+        0.6, 6.0, 4, 10, 18, 2, 0.05f, 15, 35, List.of()
     );
 
     private static Config loaded = DEFAULTS;
@@ -92,8 +87,6 @@ public class BuilderConfigDataHandler {
                 getInt(json, "burst_pause_min_ticks",          DEFAULTS.burstPauseMinTicks),
                 getInt(json, "burst_pause_max_ticks",          DEFAULTS.burstPauseMaxTicks),
                 getInt(json, "max_burst_extra_blocks",         DEFAULTS.maxBurstExtraBlocks),
-                getInt(json, "stuck_fallback_ticks",           DEFAULTS.stuckFallbackTicks),
-                getInt(json, "moving_timeout_ticks",           DEFAULTS.movingTimeoutTicks),
                 getFlt(json, "plan_read_chance",               DEFAULTS.planReadChance),
                 getInt(json, "plan_read_min_ticks",            DEFAULTS.planReadMinTicks),
                 getInt(json, "plan_read_max_ticks",            DEFAULTS.planReadMaxTicks),

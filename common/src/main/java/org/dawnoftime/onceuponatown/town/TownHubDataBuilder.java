@@ -268,12 +268,7 @@ public class TownHubDataBuilder {
         tt.putString("Id", t.id);
         tt.putString("OrientationLabel", t.orientationLabel);
         tt.putString("IconItem", t.iconItem);
-        int effMinWeight = town.effectiveMinWeight(t);
         tt.putBoolean("PrereqsMet", town.meetsEraTransitionPrereqs(t));
-        tt.putInt("RequiredWeight", effMinWeight);
-        tt.putInt("CurrentWeight", town.getCurrentWeight());
-        tt.putInt("MaxWeight", town.getCurrentMaxWeight());
-        tt.putBoolean("WeightMet", town.getCurrentWeight() >= effMinWeight && town.getCurrentWeight() <= town.getCurrentMaxWeight());
         ListTag costTag = new ListTag();
         for (ItemCost ic : t.resourceCost) {
             CompoundTag ct = new CompoundTag();
@@ -478,6 +473,8 @@ public class TownHubDataBuilder {
             QuestDataHandler.get(q.defId).ifPresent(def -> {
                 qt.putString("TitleKey", def.titleKey());
                 qt.putString("DescKey", def.descKey());
+                if (def.targetBuildingDefId() != null)
+                    qt.putString("TargetBuildingDefId", def.targetBuildingDefId());
             });
             ListTag condsTag = new ListTag();
             for (Quest.Condition c : q.conditions) {
@@ -485,6 +482,8 @@ public class TownHubDataBuilder {
                 ct.putString("Type", c.type);
                 if (c.item != null) ct.putString("Item", BuiltInRegistries.ITEM.getKey(c.item).toString());
                 ct.putInt("Required", c.required);
+                if (c.verified) ct.putBoolean("Verified", true);
+                if (c.blockId != null) ct.putString("BlockId", c.blockId);
                 condsTag.add(ct);
             }
             qt.put("Conditions", condsTag);

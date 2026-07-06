@@ -5,7 +5,6 @@
   "structure_label": "Village",
   "icon_item": "minecraft:saddle",
 
-  "min_weight_percent": 90,
   "weight_cap_increase": 10,
 
   "resource_cost": [
@@ -18,8 +17,10 @@
     { "defId": "oven", "count": 1 },
     { "defId": "cow_field", "count": 1 }
   ],
-  "unlocked_building_ids": ["leather_workshop", "pig_farm", "carpenter", "lone_place"],
+  "unlocked_building_ids": ["lone_place", "carpenter", "leather_workshop", "pig_farm"],
   "unlock_new_builder": true,
+  "auto_upgrade_ids": ["settlement_2"],
+
 
   "next_orientation": "ranching"
 }

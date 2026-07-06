@@ -7,9 +7,7 @@
   "weight": 3,
 
   "required_buildings": [
-    { "defId": "wheat_field", "count": 1 },
-    { "defId": "potato_field", "count": 1 },
-    { "defId": "carrot_field", "count": 1 }
+    { "defId": "wheat_farm", "count": 1 }
   ],
   "construction_cost": [
     {

@@ -179,8 +179,9 @@ public class TownMapWidget extends AbstractWidget {
 
     @Override
     protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        int alpha = 255;
+        // Pass 1: roads (drawn first so buildings always paint on top)
         for (MapElement mapElement : mapElements) {
+            if (mapElement.category != MapCategory.ROAD) continue;
             int buildWidth  = mapElement.maxX - mapElement.minX;
             int buildHeight = mapElement.maxZ - mapElement.minZ;
             int originX = scaledMapX() + mapElement.minX * mapZoom;
@@ -189,7 +190,39 @@ public class TownMapWidget extends AbstractWidget {
             int buildMaxX = originX + (buildWidth * mapZoom);
             int buildMinZ = originZ;
             int buildMaxZ = originZ + (buildHeight * mapZoom);
+            boolean outside = buildMinX > mapWindowRightBound || buildMaxX < mapWindowLeftBound
+                || buildMinZ > mapWindowBottomBound || buildMaxZ < mapWindowTopBound;
+            if (outside) continue;
+            int clampedMinX = Math.max(mapWindowLeftBound,   buildMinX);
+            int clampedMaxX = Math.min(mapWindowRightBound,  buildMaxX);
+            int clampedMinZ = Math.max(mapWindowTopBound,    buildMinZ);
+            int clampedMaxZ = Math.min(mapWindowBottomBound, buildMaxZ);
+            boolean mouseOver = mouseX >= clampedMinX && mouseX < clampedMaxX
+                && mouseY >= clampedMinZ && mouseY < clampedMaxZ;
+            if (mapElement.footprint != null) {
+                renderFootprint(graphics, mapElement.footprint, originX, originZ, mouseOver);
+            } else {
+                graphics.fill(clampedMinX, clampedMinZ, clampedMaxX, clampedMaxZ,
+                    color(mouseOver ? 245 : 255, mouseOver ? HOVER_RGB : ROAD_RGB));
+            }
+            if (mouseOver) {
+                graphics.renderTooltip(Minecraft.getInstance().font,
+                    mapElement.description, mapElement.productionTooltip, mouseX, mouseY);
+            }
+        }
 
+        // Pass 2: buildings and under-construction (always on top of roads)
+        int alpha = 255;
+        for (MapElement mapElement : mapElements) {
+            if (mapElement.category == MapCategory.ROAD) continue;
+            int buildWidth  = mapElement.maxX - mapElement.minX;
+            int buildHeight = mapElement.maxZ - mapElement.minZ;
+            int originX = scaledMapX() + mapElement.minX * mapZoom;
+            int originZ = scaledMapY() + mapElement.minZ * mapZoom;
+            int buildMinX = originX;
+            int buildMaxX = originX + (buildWidth * mapZoom);
+            int buildMinZ = originZ;
+            int buildMaxZ = originZ + (buildHeight * mapZoom);
             boolean outside = buildMinX > mapWindowRightBound || buildMaxX < mapWindowLeftBound
                 || buildMinZ > mapWindowBottomBound || buildMaxZ < mapWindowTopBound;
             if (!outside) {
@@ -197,18 +230,9 @@ public class TownMapWidget extends AbstractWidget {
                 int clampedMaxX = Math.min(mapWindowRightBound,  buildMaxX);
                 int clampedMinZ = Math.max(mapWindowTopBound,    buildMinZ);
                 int clampedMaxZ = Math.min(mapWindowBottomBound, buildMaxZ);
-
                 boolean mouseOver = mouseX >= clampedMinX && mouseX < clampedMaxX
                     && mouseY >= clampedMinZ && mouseY < clampedMaxZ;
-
-                if (mapElement.category == MapCategory.ROAD) {
-                    if (mapElement.footprint != null) {
-                        renderFootprint(graphics, mapElement.footprint, originX, originZ, mouseOver);
-                    } else {
-                        graphics.fill(clampedMinX, clampedMinZ, clampedMaxX, clampedMaxZ,
-                            color(mouseOver ? 245 : 255, mouseOver ? HOVER_RGB : ROAD_RGB));
-                    }
-                } else if (mapElement.category == MapCategory.UNDER_CONSTRUCTION) {
+                if (mapElement.category == MapCategory.UNDER_CONSTRUCTION) {
                     drawUnderConstructionPattern(graphics, clampedMinX, clampedMaxX, clampedMinZ, clampedMaxZ);
                 } else if (mapElement.category == MapCategory.BUILDING) {
                     Rgb rgb = mouseOver ? HOVER_RGB : buildingColor(mapElement.buildingCategory);
@@ -244,14 +268,11 @@ public class TownMapWidget extends AbstractWidget {
                         }
                     }
                 }
-
                 if (mouseOver) {
                     graphics.renderTooltip(Minecraft.getInstance().font,
-                        mapElement.description,
-                        mapElement.productionTooltip, mouseX, mouseY);
+                        mapElement.description, mapElement.productionTooltip, mouseX, mouseY);
                 }
             }
-
             alpha -= 5;
             if (alpha < 245) alpha = 248;
         }

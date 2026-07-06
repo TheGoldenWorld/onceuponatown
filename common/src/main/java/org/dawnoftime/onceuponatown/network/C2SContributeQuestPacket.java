@@ -43,6 +43,11 @@ public record C2SContributeQuestPacket(BlockPos anchorPos, String questId) {
             }
             if (quest == null) return;
 
+            // SITE_CLEARANCE: all clearance conditions must be verified server-side before claiming
+            for (Quest.Condition cond : quest.conditions) {
+                if ("CLEARANCE_BLOCK".equals(cond.type) && !cond.verified) return;
+            }
+
             // Validate player has all required items before taking anything
             for (Quest.Condition cond : quest.conditions) {
                 if ("DELIVERY".equals(cond.type) && cond.item != null) {
@@ -79,7 +84,11 @@ public record C2SContributeQuestPacket(BlockPos anchorPos, String questId) {
             }
 
             town.removeQuest(packet.questId());
-            town.getQuestDefLastCompleted().put(quest.defId, level.getGameTime());
+            // For SITE_CLEARANCE, record completion per building instance to permanently block re-spawn
+            String completedKey = "SITE_CLEARANCE".equals(quest.questType) && quest.targetWorldPos != 0L
+                ? quest.defId + ":" + quest.targetWorldPos
+                : quest.defId;
+            town.getQuestDefLastCompleted().put(completedKey, level.getGameTime());
             LevelTowns.get(level).markDirty();
             NetworkHelper.pushQuestUpdateToWatchers(level, town, packet.anchorPos());
             if (stockUpdated) NetworkHelper.pushStockToWatchers(level, town, packet.anchorPos());

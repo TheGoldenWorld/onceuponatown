@@ -6,6 +6,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Rotation;
+import java.util.UUID;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import org.dawnoftime.onceuponatown.building.schematic.BuildSchematic;
 import org.dawnoftime.onceuponatown.building.schematic.SchematicBlock;
@@ -21,6 +22,7 @@ import org.dawnoftime.onceuponatown.town.Town;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -42,6 +44,8 @@ public class NewBuildAction implements BuildAction {
     boolean skipInitialReading = false;
     // Stored during prepareBlocks; needed for entity spawning in onComplete.
     private StructureTemplate cachedTemplate = null;
+    // Populated by executeInstant for terrain-matched placements; forwarded to PlacedBuilding.
+    private List<BlockPos> obstaclePositions = List.of();
 
     public NewBuildAction(BuildingDef def, ConnectionPoint usedConnection,
                           BlockPos finalPlacementPos, Rotation rotation,
@@ -67,12 +71,10 @@ public class NewBuildAction implements BuildAction {
 
     @Override
     public boolean executeInstant(ServerLevel level, Npc npc) {
-        boolean placed = BuildSchematic.placeTerrainMatched(level, finalPlacementPos, def.nbt, rotation);
-        if (placed) {
-            BuildSchematic.computeBoundingBox(level, finalPlacementPos, def.nbt, rotation)
-                .ifPresent(bb -> BuildSchematic.applyPondEdgeRules(level, bb));
-        }
-        return placed;
+        List<BlockPos> collected = new ArrayList<>();
+        boolean ok = BuildSchematic.placeTerrainMatched(level, finalPlacementPos, def.nbt, rotation, def.obstacleBlocks, collected);
+        obstaclePositions = collected;
+        return ok;
     }
 
     @Override
@@ -101,21 +103,14 @@ public class NewBuildAction implements BuildAction {
         TerrainCarver.prePlace(level, finalPlacementPos, cachedTemplate, rotation);
         TerrainCarver.postPlace(level, finalPlacementPos, cachedTemplate, rotation);
 
-        List<SchematicBlock> blocks = SchematicReader.readSortedBlocks(cachedTemplate, rotation);
-        if (blocks.isEmpty()) {
-            // Fallback: instant placement if the reader returned nothing.
-            LOGGER.warn("[OUAT-BUILD] Empty block list from reader -- building='{}', using instant fallback", def.id);
-            BuildSchematic.place(level, finalPlacementPos, def.nbt, rotation);
-            failed = true; // signal BuildGoal to skip normal completion
-        }
-        return blocks;
+        return SchematicReader.readSortedBlocks(cachedTemplate, rotation);
     }
 
     @Override
     public void onComplete(ServerLevel level, Npc npc) {
         town.getTownInventory().removeStock(constructionCost);
         BuildSchematic.replaceJigsawInWorld(level, usedConnection.pos());
-        npc.onBuildComplete(finalPlacementPos, def.id, usedConnection, rotation, entryConnectorWorldPos);
+        npc.onBuildComplete(finalPlacementPos, def.id, usedConnection, rotation, entryConnectorWorldPos, obstaclePositions);
 
         if (cachedTemplate != null) {
             List<SchematicEntity> entities = SchematicReader.readEntities(cachedTemplate, rotation, finalPlacementPos);
@@ -124,6 +119,7 @@ public class NewBuildAction implements BuildAction {
                     Entity entity = type.create(level);
                     if (entity != null) {
                         entity.load(se.nbt());
+                        entity.setUUID(UUID.randomUUID());
                         entity.moveTo(se.worldPos().x, se.worldPos().y, se.worldPos().z,
                                       entity.getYRot(), entity.getXRot());
                         level.addFreshEntity(entity);

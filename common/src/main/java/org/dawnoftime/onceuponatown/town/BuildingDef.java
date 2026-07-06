@@ -57,6 +57,8 @@ public class BuildingDef {
     public final List<ItemCost> initialStock;
     // Weight units this building consumes from the era cap when placed or queued.
     public final int weight;
+    // Block IDs scanned when verifying a SITE_CLEARANCE quest. Empty = no clearance quest.
+    public final List<String> obstacleBlocks;
 
     // One upgrade step: cost + what it changes. All fields are additive deltas.
     public record UpgradeLevel(float cadenceMultiplier, int capacityStacksAdd, int amountAdd,
@@ -85,7 +87,8 @@ public class BuildingDef {
                        List<UpgradeLevel> upgrades, List<NbtLevel> nbtLevels,
                        int requiredResidents, List<BuildingRequirement> requiredBuildings,
                        float consumptionPerResident, List<ItemCost> initialStock,
-                       int herd, float consumptionPerHerd, int weight) {
+                       int herd, float consumptionPerHerd, int weight,
+                       List<String> obstacleBlocks) {
         this.id = id;
         this.nbt = nbt;
         this.entryPool = entryPool;
@@ -110,6 +113,7 @@ public class BuildingDef {
         this.herd = herd;
         this.consumptionPerHerd = consumptionPerHerd;
         this.weight = weight;
+        this.obstacleBlocks = obstacleBlocks;
     }
 
     // Returns effective production, cadence, residents, consumption, herd, and herd consumption at a given upgrade level.

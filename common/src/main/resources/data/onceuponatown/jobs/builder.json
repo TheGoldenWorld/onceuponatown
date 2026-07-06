@@ -5,8 +5,6 @@
   "burst_pause_min_ticks": 10,
   "burst_pause_max_ticks": 18,
   "max_burst_extra_blocks": 2,
-  "stuck_fallback_ticks": 100,
-  "moving_timeout_ticks": 3600,
   "plan_read_chance": 0.03,
   "plan_read_min_ticks": 15,
   "plan_read_max_ticks": 35,

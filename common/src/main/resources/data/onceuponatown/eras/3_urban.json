@@ -5,7 +5,6 @@
   "structure_label": "Village",
   "icon_item": "minecraft:emerald",
 
-  "min_weight_percent": 90,
   "weight_cap_increase": 10,
 
   "resource_cost": [
@@ -17,6 +16,8 @@
   "required_buildings": [
     { "defId": "merchant_shop", "count": 1 }
   ],
+
+  "auto_upgrade_ids": ["settlement_3"],
 
   "next_orientation": "urban"
 }

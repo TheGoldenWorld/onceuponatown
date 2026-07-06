@@ -68,6 +68,7 @@ public class OuatForgeClient {
                 OuatForge.CHANNEL.sendToServer(new C2SDepositPacket(pos));
             OuatForge.wireBuyPacket();
             OuatForge.wireContributeQuestPacket();
+            OuatForge.wireVerifyClearancePacket();
             OuatForge.wireToggleChatBroadcastPacket();
         });
     }

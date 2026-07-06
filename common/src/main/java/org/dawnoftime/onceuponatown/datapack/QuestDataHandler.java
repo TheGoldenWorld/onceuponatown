@@ -81,7 +81,10 @@ public class QuestDataHandler {
             prerequisites = parsePrerequisites(json.getAsJsonObject("prerequisites"));
         }
 
-        return new QuestDef(id, type, titleKey, descKey, conditions, reward, refreshIntervalTicks, prerequisites);
+        String targetBuildingDefId = json.has("target_building_def_id")
+            ? json.get("target_building_def_id").getAsString() : null;
+
+        return new QuestDef(id, type, titleKey, descKey, conditions, reward, refreshIntervalTicks, prerequisites, targetBuildingDefId);
     }
 
     private static QuestDef.Prerequisites parsePrerequisites(JsonObject json) {

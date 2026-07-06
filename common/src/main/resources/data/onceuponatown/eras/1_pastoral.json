@@ -5,7 +5,6 @@
   "structure_label": "Settlement",
   "icon_item": "minecraft:beef",
 
-  "min_weight_percent": 90,
   "weight_cap_increase": 10,
   "resource_cost": [
     { "item": "minecraft:oak_log", "amount": 20 }
@@ -14,6 +13,6 @@
   "required_buildings": [
     { "defId": "pig_field", "count": 1 }
   ],
-  "unlocked_building_ids": ["sheep_field", "cow_field", "bee_field", "wild_spot"],
+  "unlocked_building_ids": ["sheep_field", "cow_field", "bee_field", "lumberjack", "wild_spot"],
   "auto_upgrade_ids": ["settlement_2"]
 }

@@ -1,0 +1,27 @@
+{
+  "from_era": 1,
+  "from_orientation": "industrial",
+  "orientation_label": "Excavator",
+  "structure_label": "Village",
+  "icon_item": "minecraft:blast_furnace",
+
+  "weight_cap_increase": 10,
+
+  "resource_cost": [
+    { "item": "minecraft:oak_log", "amount": 42 },
+    { "item": "minecraft:cobblestone", "amount": 10 }
+  ],
+
+  "required_residents": 4,
+  "required_buildings": [
+    { "defId": "wild_stone", "count": 2 },
+    { "defId": "stone_breach", "count": 2 }
+
+  ],
+  "unlocked_building_ids": ["lone_place", "carpenter", "open_mine"],
+  "unlock_new_builder": true,
+  "auto_upgrade_ids": ["settlement"],
+
+
+  "next_orientation": "excavator"
+}

@@ -5,7 +5,6 @@
   "structure_label": "Village",
   "icon_item": "minecraft:bread",
 
-  "min_weight_percent": 90,
   "weight_cap_increase": 10,
 
   "resource_cost": [
@@ -15,8 +14,11 @@
 
   "required_residents": 5,
   "required_buildings": [
-    { "defId": "granary", "count": 1 }
+    { "defId": "wheat_farm", "count": 1 }
   ],
+
+  "auto_upgrade_ids": ["settlement_3"],
+
 
   "next_orientation": "rural"
 }

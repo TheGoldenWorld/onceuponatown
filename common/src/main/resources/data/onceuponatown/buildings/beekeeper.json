@@ -27,6 +27,81 @@
       "capacity_stacks": 1
     }
   ],
+  "transform_input_ratio": 0.1,
+  "transform_every_ticks": 1600,
+  "transformations": [
+    {
+      "inputs": [
+        { "item": "minecraft:honeycomb", "amount": 4 }
+      ],
+      "output": "minecraft:honeycomb_block",
+      "output_amount": 1,
+      "output_capacity_stacks": 1,
+      "unlock_at_level": 1
+    },
+    {
+      "inputs": [
+        { "item": "minecraft:honeycomb", "amount": 1 },
+        { "item": "minecraft:string", "amount": 1 }
+      ],
+      "output": "minecraft:candle",
+      "output_amount": 1,
+      "output_capacity_stacks": 1,
+      "unlock_at_level": 5
+    },
+    {
+      "inputs": [
+        { "item": "minecraft:honeycomb", "amount": 1 },
+        { "item": "minecraft:glass_bottle", "amount": 1 }
+      ],
+      "output": "minecraft:honey_bottle",
+      "output_amount": 1,
+      "output_capacity_stacks": 1,
+      "unlock_at_level": 4
+    },
+    {
+      "inputs": [
+        { "item": "minecraft:honey_bottle", "amount": 4 }
+      ],
+      "output": "minecraft:honey_block",
+      "output_amount": 1,
+      "output_capacity_stacks": 1,
+      "unlock_at_level": 4
+    }
+  ],
+  "upgrades": [
+    {
+      "capacity_stacks_add": 1,
+      "unlocks_display": ["minecraft:honeycomb_block"],
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 20 }]
+    },
+    {
+      "amount_add": 1,
+      "unlocks_display": ["minecraft:candle"],
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 30 }]
+    },
+    {
+      "capacity_stacks_add": 1,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 40 }]
+    },
+    {
+      "cadence_multiplier": 0.10,
+      "unlocks_display": ["minecraft:honey_bottle", "minecraft:honey_block"],
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 60 }]
+    },
+    {
+      "amount_add": 1,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 80 }]
+    },
+    {
+      "cadence_multiplier": 0.20,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 100 }]
+    },
+    {
+      "capacity_stacks_add": 1,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 120 }]
+    }
+  ],
   "nbt_levels": [
     "onceuponatown:plains/jobs/beekeeper_lvl1",
     "onceuponatown:plains/jobs/beekeeper_lvl2",

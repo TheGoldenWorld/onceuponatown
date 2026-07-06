@@ -1,0 +1,11 @@
+{
+  "id": "onceuponatown:fallen_tree",
+  "type": "SITE_CLEARANCE",
+  "title": "quest.onceuponatown.fallen_tree.title",
+  "description": "quest.onceuponatown.fallen_tree.desc",
+  "target_building_def_id": "street_8",
+  "prerequisites": {
+    "required_buildings": ["street_8"]
+  },
+  "reward": { "type": "PLAYER", "item": "minecraft:emerald", "amount": 2 }
+}
