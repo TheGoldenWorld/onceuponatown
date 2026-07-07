@@ -9,7 +9,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.item.Item;
-import org.dawnoftime.onceuponatown.Ouat;
 import org.dawnoftime.onceuponatown.town.BuildingDef;
 import org.dawnoftime.onceuponatown.town.ItemCost;
 import org.slf4j.Logger;
@@ -42,7 +41,6 @@ public class EraTransitionDataHandler {
         ResourceManager rm = server.getResourceManager();
         rm.listResources("eras", path -> path.getPath().endsWith(".json"))
             .forEach((location, resource) -> {
-                if (!location.getNamespace().equals(Ouat.MOD_ID)) return;
                 try (InputStreamReader reader = new InputStreamReader(resource.open())) {
                     JsonObject json = GSON.fromJson(reader, JsonObject.class);
                     if (json.has("era")) {

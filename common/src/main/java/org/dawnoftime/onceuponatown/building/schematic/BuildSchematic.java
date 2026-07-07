@@ -170,6 +170,67 @@ public class BuildSchematic {
         return true;
     }
 
+    // Computes the block list for a terrain-matched structure with Y offsets pre-applied per XZ column,
+    // without placing any block in the world. localPos() in each returned SchematicBlock is expressed
+    // relative to originPos, so BuildGoal.tickBuilding() can place them via getOrigin().offset(localPos).
+    // Also populates obstacleOut with the world positions of blocks whose ID appears in obstacleBlockIds.
+    public static List<SchematicBlock> prepareTerrainMatchedBlocks(ServerLevel level, BlockPos originPos,
+                                                                    ResourceLocation nbtLocation, Rotation rotation,
+                                                                    List<String> obstacleBlockIds, List<BlockPos> obstacleOut) {
+        Optional<StructureTemplate> templateOpt = level.getStructureManager().get(nbtLocation);
+        if (templateOpt.isEmpty()) {
+            LOGGER.error("[OUAT] NBT not found: {}", nbtLocation);
+            return List.of();
+        }
+
+        boolean collect = obstacleBlockIds != null && !obstacleBlockIds.isEmpty() && obstacleOut != null;
+
+        List<SchematicBlock> blocks = SchematicReader.readSortedBlocks(templateOpt.get(), rotation);
+
+        Map<Long, List<SchematicBlock>> columns = new HashMap<>();
+        for (SchematicBlock b : blocks) {
+            long key = BlockPos.asLong(b.localPos().getX(), 0, b.localPos().getZ());
+            columns.computeIfAbsent(key, k -> new ArrayList<>()).add(b);
+        }
+
+        List<SchematicBlock> result = new ArrayList<>();
+        for (List<SchematicBlock> column : columns.values()) {
+            int templateFloorY = Integer.MAX_VALUE;
+            for (SchematicBlock b : column) {
+                if (b.localPos().getY() < templateFloorY) templateFloorY = b.localPos().getY();
+            }
+
+            int wx = originPos.getX() + column.get(0).localPos().getX();
+            int wz = originPos.getZ() + column.get(0).localPos().getZ();
+
+            int scanStart = level.getHeight(Heightmap.Types.WORLD_SURFACE, wx, wz) - 1;
+            int terrainY = Integer.MIN_VALUE;
+            for (int y = scanStart; y >= level.getMinBuildHeight(); y--) {
+                BlockState bs = level.getBlockState(new BlockPos(wx, y, wz));
+                if (!bs.isAir() && !SCAN_IGNORE_BLOCKS.contains(bs.getBlock())) {
+                    terrainY = y;
+                    break;
+                }
+            }
+
+            if (terrainY == Integer.MIN_VALUE) continue;
+
+            int deltaY = terrainY - templateFloorY;
+
+            for (SchematicBlock b : column) {
+                BlockPos worldPos = new BlockPos(wx, b.localPos().getY() + deltaY, wz);
+                BlockPos localPos = worldPos.subtract(originPos);
+                result.add(new SchematicBlock(localPos, b.state(), b.nbt()));
+                if (collect) {
+                    String id = BuiltInRegistries.BLOCK.getKey(b.state().getBlock()).toString();
+                    if (obstacleBlockIds.contains(id)) obstacleOut.add(worldPos);
+                }
+            }
+        }
+
+        return result;
+    }
+
     // Replaces jigsaw blocks with their "turns_into" target block after structure placement.
     private static void replaceJigsawBlocks(ServerLevel level, BlockPos origin,
                                              StructureTemplate template, Rotation rotation) {

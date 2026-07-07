@@ -6,7 +6,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.ResourceManager;
-import org.dawnoftime.onceuponatown.Ouat;
 import org.dawnoftime.onceuponatown.town.QuestDef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +30,6 @@ public class QuestDataHandler {
         ResourceManager rm = server.getResourceManager();
         rm.listResources("quests", path -> path.getPath().endsWith(".json"))
             .forEach((location, resource) -> {
-                if (!location.getNamespace().equals(Ouat.MOD_ID)) return;
                 try (InputStreamReader reader = new InputStreamReader(resource.open())) {
                     JsonObject json = GSON.fromJson(reader, JsonObject.class);
                     QuestDef def = parseDef(json);

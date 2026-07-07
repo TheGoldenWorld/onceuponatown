@@ -5,7 +5,6 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.ResourceManager;
-import org.dawnoftime.onceuponatown.Ouat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,7 +23,6 @@ public class BuildingListDataHandler {
         ResourceManager rm = server.getResourceManager();
         var resources = rm.listResources("config", path -> path.getPath().endsWith("building_list.json"));
         for (var entry : resources.entrySet()) {
-            if (!entry.getKey().getNamespace().equals(Ouat.MOD_ID)) continue;
             try (InputStreamReader reader = new InputStreamReader(entry.getValue().open())) {
                 JsonObject json = GSON.fromJson(reader, JsonObject.class);
                 if (json.has("order")) {

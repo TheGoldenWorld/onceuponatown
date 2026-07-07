@@ -53,7 +53,16 @@ public class ChunkGeneratorMixin {
             .getKey(self.getStructure());
 
         if (structureKey == null) return;
-        if (!structureKey.equals(new ResourceLocation(Ouat.MOD_ID, "plains_town"))) return;
+        var structureTagKey = net.minecraft.tags.TagKey.create(
+            Registries.STRUCTURE,
+            new ResourceLocation(Ouat.MOD_ID, "town_structures")
+        );
+        var structureRegistry = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        var structureHolder = structureRegistry.getHolder(
+            net.minecraft.resources.ResourceKey.create(Registries.STRUCTURE, structureKey)
+        ).orElse(null);
+        boolean isTownStructure = structureHolder != null && structureHolder.is(structureTagKey);
+        if (!isTownStructure) return;
 
         // Use the starter piece (first in list) as anchor reference.
         // The full structure BB shifts with random growth; the starter piece is always the settlement.
@@ -204,7 +213,6 @@ public class ChunkGeneratorMixin {
 
     private String extractDefId(PoolElementStructurePiece piece) {
         String templatePath = piece.getElement().toString();
-        if (!templatePath.contains(Ouat.MOD_ID)) return null;
         // Sort by id length descending so "settlement_2" is checked before "settlement",
         // preventing the shorter id from matching as a substring of a longer one.
         return BuildingDataHandler.getAll().stream()

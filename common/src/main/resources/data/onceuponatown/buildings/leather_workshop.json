@@ -17,6 +17,10 @@
     {
       "item": "minecraft:cobblestone",
       "amount": 5
+    },
+    {
+      "item": "minecraft:white_bed",
+      "amount": 1
     }
   ],
   "transform_input_ratio": 0.1,

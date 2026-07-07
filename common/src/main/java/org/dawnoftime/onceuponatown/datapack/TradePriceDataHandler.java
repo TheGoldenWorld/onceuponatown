@@ -9,7 +9,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.item.Item;
-import org.dawnoftime.onceuponatown.Ouat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +34,6 @@ public class TradePriceDataHandler {
         ResourceManager rm = server.getResourceManager();
         var resources = rm.listResources("config", path -> path.getPath().endsWith("trade_prices.json"));
         for (var entry : resources.entrySet()) {
-            if (!entry.getKey().getNamespace().equals(Ouat.MOD_ID)) continue;
             try (InputStreamReader reader = new InputStreamReader(entry.getValue().open())) {
                 JsonObject json = GSON.fromJson(reader, JsonObject.class);
                 if (json.has("prices")) {

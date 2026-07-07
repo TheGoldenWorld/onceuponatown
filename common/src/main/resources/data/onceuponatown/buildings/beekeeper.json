@@ -17,6 +17,10 @@
     {
       "item": "minecraft:cobblestone",
       "amount": 15
+    },
+    {
+      "item": "minecraft:white_bed",
+      "amount": 1
     }
   ],
   "production": [

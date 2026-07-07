@@ -67,7 +67,7 @@ public class NewBuildAction implements BuildAction {
     public BlockPos getOrigin() { return finalPlacementPos; }
 
     @Override
-    public boolean isInstant() { return def.terrainMatching; }
+    public boolean isInstant() { return false; }
 
     @Override
     public boolean executeInstant(ServerLevel level, Npc npc) {
@@ -94,6 +94,22 @@ public class NewBuildAction implements BuildAction {
             return List.of();
         }
         cachedTemplate = templateOpt.get();
+
+        if (def.terrainMatching) {
+            if (skipTerrainPrep) {
+                // Resume: recompute Y-adjusted positions and filter blocks already placed.
+                List<SchematicBlock> full = BuildSchematic.prepareTerrainMatchedBlocks(
+                    level, finalPlacementPos, def.nbt, rotation, def.obstacleBlocks, null);
+                return full.stream()
+                    .filter(b -> !level.getBlockState(finalPlacementPos.offset(b.localPos())).equals(b.state()))
+                    .toList();
+            }
+            List<BlockPos> collected = new ArrayList<>();
+            List<SchematicBlock> result = BuildSchematic.prepareTerrainMatchedBlocks(
+                level, finalPlacementPos, def.nbt, rotation, def.obstacleBlocks, collected);
+            obstaclePositions = collected;
+            return result;
+        }
 
         if (skipTerrainPrep) {
             // Resume: skip terrain carving and return only blocks not yet in the world.
