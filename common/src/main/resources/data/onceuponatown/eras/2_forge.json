@@ -16,10 +16,12 @@
   "required_buildings": [
     { "defId": "wild_stone", "count": 2 }
   ],
-  "unlocked_building_ids": ["lone_place", "carpenter"],
-  "unlock_new_builder": true,
-  "auto_upgrade_ids": ["settlement"],
 
+  "auto_build_sequence": ["stone_breach", "lumberjack", "oven", "house_3"],
+
+  "unlocked_building_ids": ["lone_place", "carpenter"],
+  "unlock_npc_counts": { "builder": 1 },
+  "auto_upgrade_ids": ["settlement"],
 
   "next_orientation": "forge"
 }

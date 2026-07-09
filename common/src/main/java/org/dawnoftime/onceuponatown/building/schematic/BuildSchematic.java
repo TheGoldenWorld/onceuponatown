@@ -77,6 +77,18 @@ public class BuildSchematic {
         SCAN_IGNORE_BLOCKS = Collections.unmodifiableSet(s);
     }
 
+    // Priority table for blocks deferred until after the main build loop.
+    // Lower value = placed first. Water must precede lily pads (lily pads require a water source beneath them).
+    // To support a new block: add one entry here with the desired placement order.
+    // V2 note: this map is intended to become data-driven via block tags (onceuponatown:deferred_tier_N).
+    public static final Map<Block, Integer> DEFERRED_PLACEMENT_PRIORITY;
+    static {
+        Map<Block, Integer> m = new HashMap<>();
+        m.put(Blocks.WATER, 0);
+        m.put(Blocks.LILY_PAD, 1);
+        DEFERRED_PLACEMENT_PRIORITY = Collections.unmodifiableMap(m);
+    }
+
     // Places the NBT structure into the world with the given rotation. Returns false on error.
     public static boolean place(ServerLevel level, BlockPos pos, ResourceLocation nbtLocation, Rotation rotation) {
         Optional<StructureTemplate> template = level.getStructureManager().get(nbtLocation);

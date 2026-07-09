@@ -8,7 +8,7 @@
 
   "required_buildings": [
     { "defId": "workshop", "count": 1 },
-    { "defId": "pig_field", "count": 1 }
+    { "defId": "wild_stone", "count": 1 }
   ],
   "construction_cost": [
     {
@@ -31,11 +31,11 @@
     },
     {
       "inputs": [
-        { "item": "minecraft:charcoal", "amount": 1 },
-        { "item": "minecraft:stick", "amount": 1 }
+        { "item": "minecraft:potato", "amount": 3 },
+        { "item": "minecraft:charcoal", "amount": 1 }
       ],
-      "output": "minecraft:torch",
-      "output_amount": 4,
+      "output": "minecraft:baked_potato",
+      "output_amount": 3,
       "output_capacity_stacks": 1
     },
     {
@@ -67,12 +67,11 @@
     },
     {
       "inputs": [
-        { "item": "minecraft:oak_log", "amount": 3 },
-        { "item": "minecraft:stick", "amount": 3 },
-        { "item": "minecraft:charcoal", "amount": 1 }
+        { "item": "minecraft:charcoal", "amount": 1 },
+        { "item": "minecraft:stick", "amount": 1 }
       ],
-      "output": "minecraft:campfire",
-      "output_amount": 1,
+      "output": "minecraft:torch",
+      "output_amount": 4,
       "output_capacity_stacks": 1
     }
   ]

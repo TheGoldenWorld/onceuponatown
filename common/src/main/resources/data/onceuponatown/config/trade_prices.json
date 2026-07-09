@@ -48,13 +48,8 @@
     { "item": "minecraft:leather",            "buy": 5, "sell": 3, "quantity": 8  },
     { "item": "minecraft:honeycomb",          "buy": 5, "sell": 3, "quantity": 8  },
     { "item": "minecraft:white_wool",         "buy": 5, "sell": 3, "quantity": 10 },
-    { "item": "minecraft:item_frame",         "buy": 5, "sell": 3, "quantity": 5  }
-
-
-
-
-
-
+    { "item": "minecraft:item_frame",         "buy": 5, "sell": 3, "quantity": 5  },
+    { "item": "minecraft:item_frame",         "buy": 4, "sell": 2, "quantity": 1  }
 
   ]
 }

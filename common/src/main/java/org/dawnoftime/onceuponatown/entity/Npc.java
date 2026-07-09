@@ -13,6 +13,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
@@ -23,17 +24,11 @@ import org.dawnoftime.onceuponatown.entity.ai.OuatWalkNodeEvaluator;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import org.dawnoftime.onceuponatown.entity.ai.OpenFenceGateGoal;
-import net.minecraft.world.level.block.Rotation;
-import net.minecraft.world.level.levelgen.structure.BoundingBox;
-import org.dawnoftime.onceuponatown.building.schematic.BuildSchematic;
-import org.dawnoftime.onceuponatown.datapack.BuildingDataHandler;
-import org.dawnoftime.onceuponatown.entity.ai.SimpleStateMachine;
-import org.dawnoftime.onceuponatown.town.ConnectionPoint;
+import org.dawnoftime.onceuponatown.entity.ai.shared.OpenFenceGateGoal;
+import org.dawnoftime.onceuponatown.entity.ai.NpcJob;
+import org.dawnoftime.onceuponatown.entity.ai.NpcJobRegistry;
 import org.dawnoftime.onceuponatown.town.LevelTowns;
 import org.dawnoftime.onceuponatown.town.Town;
-
-import java.util.List;
 
 public class Npc extends PathfinderMob {
     private static final EntityDataAccessor<Boolean> DATA_IS_READING =
@@ -46,7 +41,8 @@ public class Npc extends PathfinderMob {
     public int clientLastBuildGeneration = -1;
     public float clientBuildPlacedAtAge = -1000f;
 
-    private SimpleStateMachine stateMachine;
+    private NpcJob job;
+    private String jobId = "builder";
     // Server-side countdown -- cleared to 0 when the reading animation ends.
     private int readingTicksRemaining = 0;
     // Anchor position of the town this builder belongs to; saved so the builder can self-validate on load.
@@ -97,13 +93,13 @@ public class Npc extends PathfinderMob {
             if (!anchorValidated && townAnchorPos != null && level() instanceof ServerLevel sl) {
                 anchorValidated = true;
                 Town town = LevelTowns.get(sl).getTownAt(townAnchorPos).orElse(null);
-                if (town == null || !town.getBuilderNpcIds().contains(getUUID())) {
+                if (town == null || !town.getNpcsByJob(jobId).contains(getUUID())) {
                     discard();
                     return;
                 }
             }
-            if (stateMachine == null) stateMachine = new SimpleStateMachine(this);
-            stateMachine.tick();
+            if (job == null) job = NpcJobRegistry.create(jobId, this);
+            job.tick();
             if (readingTicksRemaining > 0 && --readingTicksRemaining == 0) {
                 entityData.set(DATA_IS_READING, false);
                 setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
@@ -114,44 +110,22 @@ public class Npc extends PathfinderMob {
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
+        tag.putString("JobId", jobId);
         if (townAnchorPos != null) tag.put("TownAnchorPos", NbtUtils.writeBlockPos(townAnchorPos));
     }
 
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+        if (tag.contains("JobId")) jobId = tag.getString("JobId");
         if (tag.contains("TownAnchorPos")) townAnchorPos = NbtUtils.readBlockPos(tag.getCompound("TownAnchorPos"));
     }
 
     public void setTownAnchorPos(BlockPos pos) { this.townAnchorPos = pos; }
     public BlockPos getTownAnchorPos() { return townAnchorPos; }
 
-    // Called by BuildGoal when construction is complete.
-    // rotation and entryConnectorWorldPos are precomputed by SimpleStateMachine/BuildGoal.
-    public void onBuildComplete(BlockPos builtAt, String buildingId, ConnectionPoint usedConnection,
-                                Rotation rotation, BlockPos entryConnectorWorldPos,
-                                List<BlockPos> obstaclePositions) {
-        if (!(level() instanceof ServerLevel serverLevel)) return;
-        LevelTowns.get(serverLevel).getAllTowns().stream()
-            .filter(t -> t.getBuilderNpcIds().contains(getUUID()))
-            .findFirst()
-            .ifPresent(town -> {
-                boolean terrainMatching = BuildingDataHandler.get(buildingId)
-                    .map(d -> d.terrainMatching).orElse(false);
-                List<ConnectionPoint> connections = BuildSchematic.readJigsawPoints(
-                    serverLevel, builtAt, buildingId, rotation, entryConnectorWorldPos, terrainMatching);
-                BoundingBox bb = BuildingDataHandler.get(buildingId)
-                    .flatMap(def -> def.terrainMatching
-                        ? BuildSchematic.computeFootprintBoundingBox(serverLevel, builtAt, def.nbt, rotation)
-                        : BuildSchematic.computeBoundingBox(serverLevel, builtAt, def.nbt, rotation))
-                    .orElseGet(() -> new BoundingBox(
-                        builtAt.getX(), builtAt.getY(), builtAt.getZ(),
-                        builtAt.getX(), builtAt.getY(), builtAt.getZ()
-                    ));
-                town.registerBuilding(builtAt, buildingId, connections, bb, rotation, obstaclePositions);
-                LevelTowns.get(serverLevel).markDirty();
-            });
-    }
+    public String getJobId() { return jobId; }
+    public void setJobId(String jobId) { this.jobId = jobId; }
 
     @Override
     protected SoundEvent getAmbientSound() { return SoundEvents.VILLAGER_AMBIENT; }
@@ -213,7 +187,20 @@ public class Npc extends PathfinderMob {
         entityData.set(DATA_BUILD_GENERATION, entityData.get(DATA_BUILD_GENERATION) + 1);
     }
 
-    public boolean isCrossingArms() { return false; }
     public boolean isReading() { return entityData.get(DATA_IS_READING); }
     public int getBuildGeneration() { return entityData.get(DATA_BUILD_GENERATION); }
+
+    // Sleep helpers: LivingEntity.setSleepingPos / clearSleepingPos are protected.
+    public void startSleeping(BlockPos pos) {
+        setSleepingPos(pos);
+        setPose(Pose.SLEEPING);
+        setXRot(0.0F);
+        setYRot(0.0F);
+        getNavigation().stop();
+    }
+
+    public void stopSleeping() {
+        clearSleepingPos();
+        setPose(Pose.STANDING);
+    }
 }

@@ -1,13 +1,14 @@
-package org.dawnoftime.onceuponatown.entity.ai;
+package org.dawnoftime.onceuponatown.entity.ai.builder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Blocks;
+import org.dawnoftime.onceuponatown.building.schematic.BlockStep;
 import org.dawnoftime.onceuponatown.building.schematic.BuildSchematic;
+import org.dawnoftime.onceuponatown.building.schematic.EntityStep;
+import org.dawnoftime.onceuponatown.building.schematic.PlacementStep;
 import org.dawnoftime.onceuponatown.building.schematic.SchematicBlock;
 import org.dawnoftime.onceuponatown.building.schematic.SchematicEntity;
 import org.dawnoftime.onceuponatown.entity.Npc;
@@ -20,11 +21,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 // Handles visual building upgrades: computes the diff between two NBT levels and applies
-// it block-by-block. Increments the building's upgrade level on completion.
-public class UpgradeAction implements BuildAction {
+// it block-by-block via the NPC animation loop. Increments the building's upgrade level on completion.
+// Entity diff is appended as EntitySteps at the end of prepareSteps(), same pipeline as NewBuildAction.
+public class UpgradeAction implements BuilderAction {
     private static final Logger LOGGER = LoggerFactory.getLogger(UpgradeAction.class);
 
     private final PlacedBuilding building;
@@ -63,7 +66,7 @@ public class UpgradeAction implements BuildAction {
     }
 
     @Override
-    public List<SchematicBlock> prepareBlocks(ServerLevel level, Npc npc) {
+    public List<PlacementStep> prepareSteps(ServerLevel level, Npc npc) {
         ResourceLocation fromNbt = (fromLevel == 0)
             ? def.nbt
             : (fromLevel - 1 < def.nbtLevels.size() ? def.nbtLevels.get(fromLevel - 1).nbt() : null);
@@ -73,12 +76,36 @@ public class UpgradeAction implements BuildAction {
 
         BuildSchematic.DiffResult diff = BuildSchematic.computeDiff(level, fromNbt, toNbt, building.rotation, undergroundDepth);
 
-        List<SchematicBlock> steps = new ArrayList<>(diff.toRemove().size() + diff.toAdd().size());
+        List<PlacementStep> steps = new ArrayList<>(diff.toRemove().size() + diff.toAdd().size());
+
         // Removals first so space is clear before adding new blocks.
         for (BlockPos removePos : diff.toRemove()) {
-            steps.add(new SchematicBlock(removePos, Blocks.AIR.defaultBlockState(), null));
+            steps.add(new BlockStep(getOrigin().offset(removePos), Blocks.AIR.defaultBlockState(), null));
         }
-        steps.addAll(diff.toAdd());
+
+        // Additions: normal blocks first, deferred (water, lily pads) last.
+        List<BlockStep> normal = new ArrayList<>();
+        List<BlockStep> deferred = new ArrayList<>();
+        for (SchematicBlock b : diff.toAdd()) {
+            BlockStep step = new BlockStep(getOrigin().offset(b.localPos()), b.state(), b.nbt());
+            if (BuildSchematic.DEFERRED_PLACEMENT_PRIORITY.containsKey(b.state().getBlock())) {
+                deferred.add(step);
+            } else {
+                normal.add(step);
+            }
+        }
+        deferred.sort(Comparator.comparingInt(b -> BuildSchematic.DEFERRED_PLACEMENT_PRIORITY.get(b.state().getBlock())));
+        steps.addAll(normal);
+        steps.addAll(deferred);
+
+        // Entity diff: entities present in toNbt but not in fromNbt, appended last so all
+        // blocks are placed before entities spawn. UUID is randomized in BuildGoal per EntityStep.
+        List<SchematicEntity> entityDiff = BuildSchematic.computeEntityDiff(
+            level, fromNbt, toNbt, building.rotation, building.worldPos, undergroundDepth);
+        for (SchematicEntity se : entityDiff) {
+            steps.add(new EntityStep(se.worldPos(), se.nbt()));
+        }
+
         return steps;
     }
 
@@ -106,24 +133,6 @@ public class UpgradeAction implements BuildAction {
                 }
             }
 
-            ResourceLocation fromNbt = (fromLevel == 0)
-                ? def.nbt
-                : (fromLevel - 1 < def.nbtLevels.size() ? def.nbtLevels.get(fromLevel - 1).nbt() : null);
-            if (fromNbt != null) {
-                List<SchematicEntity> toSpawn = BuildSchematic.computeEntityDiff(
-                    level, fromNbt, newNbtLevel.nbt(), building.rotation, building.worldPos, undergroundDepth);
-                for (SchematicEntity se : toSpawn) {
-                    EntityType.by(se.nbt()).ifPresent(type -> {
-                        Entity entity = type.create(level);
-                        if (entity != null) {
-                            entity.load(se.nbt());
-                            entity.moveTo(se.worldPos().x, se.worldPos().y, se.worldPos().z,
-                                          entity.getYRot(), entity.getXRot());
-                            level.addFreshEntity(entity);
-                        }
-                    });
-                }
-            }
         }
 
         LevelTowns.get(level).markDirty();

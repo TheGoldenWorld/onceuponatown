@@ -1,39 +1,50 @@
-package org.dawnoftime.onceuponatown.entity.ai;
+package org.dawnoftime.onceuponatown.entity.ai.builder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import org.dawnoftime.onceuponatown.town.ActiveBuildState;
-import org.dawnoftime.onceuponatown.town.ConnectionPoint;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.DoorBlock;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.phys.Vec3;
-import org.dawnoftime.onceuponatown.building.schematic.SchematicBlock;
+import org.dawnoftime.onceuponatown.building.schematic.BlockStep;
+import org.dawnoftime.onceuponatown.building.schematic.BuildSchematic;
+import org.dawnoftime.onceuponatown.building.schematic.EntityStep;
+import org.dawnoftime.onceuponatown.building.schematic.PlacementStep;
 import org.dawnoftime.onceuponatown.datapack.BuilderConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuildingDataHandler;
 import org.dawnoftime.onceuponatown.entity.Npc;
+import org.dawnoftime.onceuponatown.entity.ai.shared.GoToPosition;
+import org.dawnoftime.onceuponatown.town.ActiveBuildState;
 import org.dawnoftime.onceuponatown.town.BuildingDef;
+import org.dawnoftime.onceuponatown.town.ConnectionPoint;
 import org.dawnoftime.onceuponatown.town.Town;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.UUID;
 
-// Unified NPC construction executor. Pluggable behavior is provided by a BuildAction:
+// Unified NPC construction executor. Pluggable behavior is provided by a BuilderAction:
 //   - NewBuildAction: places a full NBT template block-by-block
 //   - UpgradeAction:  applies a visual diff between two NBT levels
 // Future modes (e.g. demolition) follow the same interface.
 //
 // Phase flow:
 //   MOVING   -- NPC walks to action.getTargetPos() (connection point or building origin)
-//   BUILDING -- waits for any reading animation, then places blocks one-by-one with burst rhythm
+//   BUILDING -- waits for any reading animation, then executes PlacementSteps one-by-one
 //   DONE     -- task complete (success or failure)
+//
+// The PlacementStep list from prepareSteps() is ordered:
+//   normal blocks (Y-sorted snake) -> deferred blocks (water, lily pads) -> entities
+// All steps go through the same burst rhythm, navigation, and arm-swing logic.
 //
 // For instant (terrain-matched) builds the BUILDING phase is skipped:
 //   MOVING -> executeInstant() -> DONE
@@ -52,19 +63,19 @@ public class BuildGoal implements BuildTask {
     private static int planReadMax()       { return BuilderConfigDataHandler.get().planReadMaxTicks; }
 
     private final Npc npc;
-    private final BuildAction action;
+    private final BuilderAction action;
     private Phase phase = Phase.MOVING;
     private final GoToPosition goTo;
 
     // BUILDING state
-    private List<SchematicBlock> blocks = null;
+    private List<PlacementStep> steps = null;
     private int buildProgress = 0;
     private int buildSpeedCooldown = 0;
     private int burstBlocksLeft = 0;
     private GoToPosition buildGoTo = null;
     private BlockPos currentBuildTarget = null;
 
-    public BuildGoal(Npc npc, BuildAction action) {
+    public BuildGoal(Npc npc, BuilderAction action) {
         this.npc = npc;
         this.action = action;
         this.goTo = new GoToPosition(npc, action.getTargetPos(), BuilderConfigDataHandler.get().walkSpeed, reachDist());
@@ -113,29 +124,28 @@ public class BuildGoal implements BuildTask {
         // Wait for any pre-build animation (e.g. reading the plan) to finish.
         if (npc.isReading()) return false;
 
-        // Load block list on first BUILDING tick.
-        if (blocks == null) {
-            blocks = action.prepareBlocks(sl, npc);
+        // Load step list on first BUILDING tick.
+        if (steps == null) {
+            steps = action.prepareSteps(sl, npc);
         }
 
-        // Empty list or action marked itself failed (e.g. fallback instant placement already ran).
-        if (blocks.isEmpty() || action.isFailed()) {
+        // Empty list or action marked itself failed.
+        if (steps.isEmpty() || action.isFailed()) {
             if (!action.isFailed()) action.onComplete(sl, npc);
             phase = Phase.DONE;
             return true;
         }
 
-        if (buildProgress >= blocks.size()) {
+        if (buildProgress >= steps.size()) {
             action.onComplete(sl, npc);
             phase = Phase.DONE;
             return true;
         }
 
-        // Keep the NPC facing the current block every tick for smooth head tracking.
-        BlockPos nextWorldPos = action.getOrigin().offset(blocks.get(buildProgress).localPos());
+        // Navigate toward the current step and keep the NPC's head tracking it.
+        BlockPos nextWorldPos = steps.get(buildProgress).targetPos();
         npc.getLookControl().setLookAt(nextWorldPos.getX() + 0.5, nextWorldPos.getY() + 0.5, nextWorldPos.getZ() + 0.5);
 
-        // Navigate toward the next block before placing it.
         double distSq = npc.distanceToSqr(Vec3.atCenterOf(nextWorldPos));
         boolean inReach = distSq <= reachDist() * reachDist();
 
@@ -153,38 +163,52 @@ public class BuildGoal implements BuildTask {
 
         if (buildSpeedCooldown > 0) { buildSpeedCooldown--; return false; }
 
-        // Place exactly one block.
-        SchematicBlock b = blocks.get(buildProgress);
-        BlockPos worldPos = action.getOrigin().offset(b.localPos());
+        // Execute the current step: block placement or entity spawn.
+        PlacementStep step = steps.get(buildProgress);
 
-        ItemStack handItem = new ItemStack(b.state().getBlock().asItem());
-        if (!handItem.isEmpty()) npc.holdInMainHand(handItem);
+        if (step instanceof BlockStep bs) {
+            ItemStack handItem = new ItemStack(bs.state().getBlock().asItem());
+            if (!handItem.isEmpty()) npc.holdInMainHand(handItem);
 
-        npc.getLookControl().setLookAt(worldPos.getX() + 0.5, worldPos.getY() + 0.5, worldPos.getZ() + 0.5);
-        sl.setBlock(worldPos, b.state(), Block.UPDATE_ALL);
+            npc.getLookControl().setLookAt(bs.worldPos().getX() + 0.5, bs.worldPos().getY() + 0.5, bs.worldPos().getZ() + 0.5);
+            sl.setBlock(bs.worldPos(), bs.state(), Block.UPDATE_ALL);
 
-        SoundType sound = b.state().getSoundType();
-        sl.playSound(null, worldPos, sound.getPlaceSound(), SoundSource.BLOCKS,
-            sound.getVolume(), sound.getPitch());
+            SoundType sound = bs.state().getSoundType();
+            sl.playSound(null, bs.worldPos(), sound.getPlaceSound(), SoundSource.BLOCKS,
+                sound.getVolume(), sound.getPitch());
 
-        if (b.nbt() != null) {
-            BlockEntity be = sl.getBlockEntity(worldPos);
-            if (be != null) be.load(b.nbt().copy());
-        }
+            if (bs.nbt() != null) {
+                BlockEntity be = sl.getBlockEntity(bs.worldPos());
+                if (be != null) be.load(bs.nbt().copy());
+            }
 
-        // Doors are 2-block-tall structures. Placing only the lower half leaves a broken half-door
-        // in the world that blocks the NPC's pathfinder until the upper half is placed later.
-        // Immediately find and place the upper half to keep the door complete at all times.
-        if (b.state().getBlock() instanceof DoorBlock &&
-                b.state().getValue(DoorBlock.HALF) == DoubleBlockHalf.LOWER) {
-            BlockPos upperPos = worldPos.above();
-            for (int k = buildProgress + 1; k < blocks.size(); k++) {
-                if (action.getOrigin().offset(blocks.get(k).localPos()).equals(upperPos)) {
-                    sl.setBlock(upperPos, blocks.get(k).state(), Block.UPDATE_ALL);
-                    blocks.remove(k);
-                    break;
+            // Doors are 2-block-tall structures. Place the upper half immediately when placing the lower
+            // half to keep the door complete and avoid blocking the NPC's pathfinder.
+            if (bs.state().getBlock() instanceof DoorBlock &&
+                    bs.state().getValue(DoorBlock.HALF) == DoubleBlockHalf.LOWER) {
+                BlockPos upperPos = bs.worldPos().above();
+                for (int k = buildProgress + 1; k < steps.size(); k++) {
+                    if (steps.get(k) instanceof BlockStep upper && upper.worldPos().equals(upperPos)) {
+                        sl.setBlock(upper.worldPos(), upper.state(), Block.UPDATE_ALL);
+                        steps.remove(k);
+                        break;
+                    }
                 }
             }
+
+        } else if (step instanceof EntityStep es) {
+            // Full NBT preservation: load() restores name, stats, and all type-specific data.
+            // New UUID on every spawn prevents Minecraft from treating template entities as duplicates.
+            EntityType.by(es.entityNbt()).ifPresent(type -> {
+                Entity entity = type.create(sl);
+                if (entity != null) {
+                    entity.load(es.entityNbt().copy());
+                    entity.setUUID(UUID.randomUUID());
+                    entity.moveTo(es.worldPos().x, es.worldPos().y, es.worldPos().z,
+                                  entity.getYRot(), entity.getXRot());
+                    sl.addFreshEntity(entity);
+                }
+            });
         }
 
         buildProgress++;
@@ -203,7 +227,7 @@ public class BuildGoal implements BuildTask {
             }
         }
 
-        if (buildProgress >= blocks.size()) {
+        if (buildProgress >= steps.size()) {
             action.onComplete(sl, npc);
             phase = Phase.DONE;
             return true;
@@ -233,8 +257,7 @@ public class BuildGoal implements BuildTask {
         action.skipInitialReading = true;
 
         // addUnderConstruction is called here -- Town.fromNbt() is static with no ServerLevel.
-        org.dawnoftime.onceuponatown.building.schematic.BuildSchematic
-            .computeBoundingBox(level, state.placementPos(), def.nbt, state.rotation())
+        BuildSchematic.computeBoundingBox(level, state.placementPos(), def.nbt, state.rotation())
             .ifPresent(bb -> town.addUnderConstruction(def.id, state.placementPos(), bb, state.rotation()));
 
         return new BuildGoal(npc, action);

@@ -122,15 +122,27 @@ public class EraTransitionDataHandler {
             }
         }
 
+        List<String> autoBuildSequence = new ArrayList<>();
+        if (json.has("auto_build_sequence")) {
+            for (JsonElement el : json.getAsJsonArray("auto_build_sequence")) {
+                autoBuildSequence.add(el.getAsString());
+            }
+        }
+
         String structureLabel = json.has("structure_label")
             ? json.get("structure_label").getAsString()
             : "";
-        boolean unlockNewBuilder = json.has("unlock_new_builder") && json.get("unlock_new_builder").getAsBoolean();
+        Map<String, Integer> unlockNpcCounts = new HashMap<>();
+        if (json.has("unlock_npc_counts")) {
+            for (Map.Entry<String, JsonElement> e : json.getAsJsonObject("unlock_npc_counts").entrySet()) {
+                unlockNpcCounts.put(e.getKey(), e.getValue().getAsInt());
+            }
+        }
 
         return new EraTransitionDef(id, fromEra, fromOrientation, orientationLabel, iconItem,
             resourceCost, requiredResidents, requiredBuildings, Collections.unmodifiableList(unlockedBuildingIds),
-            nextOrientation, weightCapIncrease, structureLabel, unlockNewBuilder,
-            Collections.unmodifiableList(autoUpgradeIds));
+            nextOrientation, weightCapIncrease, structureLabel, Collections.unmodifiableMap(unlockNpcCounts),
+            Collections.unmodifiableList(autoUpgradeIds), Collections.unmodifiableList(autoBuildSequence));
     }
 
     public static List<EraTransitionDef> getAvailableTransitions(int fromEra, String currentOrientation) {

@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -45,10 +46,11 @@ public class Town {
     private final List<BoundingBox> blockedZones = new ArrayList<>();
     // World positions of buildings currently being upgraded by an NPC (runtime-only, not persisted).
     private final Set<BlockPos> underUpgrade = new HashSet<>();
-    // Ordered list of builder NPC UUIDs. Slot 0 is the primary builder (handles street expansion).
-    private final List<UUID> builderNpcIds = new ArrayList<>();
-    // How many builders should be active. Starts at 1, incremented by era transitions with unlock_new_builder.
-    private int targetBuilderCount = 1;
+    // NPC UUID lists keyed by job id. LinkedHashMap preserves insertion order; "builder" is always first.
+    // Slot index within each list matches the slot used in activeBuilds.
+    private final Map<String, List<UUID>> npcsByJob = new LinkedHashMap<>();
+    // How many NPCs of each job should be active. Incremented by era transitions.
+    private final Map<String, Integer> targetNpcCounts = new LinkedHashMap<>();
     // Runtime-only claim map: queue index -> builder UUID. Prevents two builders from picking the same entry.
     // Not persisted: claims are re-established on the next idle tick after a server restart.
     private final Map<Integer, UUID> queueIndexClaims = new HashMap<>();
@@ -92,6 +94,17 @@ public class Town {
     // Monotonically increasing counter stamped onto each ConnectionPoint when added to freeConnections.
     // Allows sorting by insertion age: lower = older = closer to the village center.
     private long cpInsertionCounter = 0;
+
+    // When true, the village manages era transitions and building queue automatically.
+    private boolean autonomyEnabled = true;
+    // The transition id chosen at the current fork point (empty = none chosen yet or no fork).
+    // Set randomly by EraManager when multiple transitions are available; overridable by player.
+    private String autonomyChosenTransitionId = "";
+
+    public Town() {
+        npcsByJob.put("builder", new ArrayList<>());
+        targetNpcCounts.put("builder", 1);
+    }
 
     public void registerBuilding(BlockPos worldPos, String defId, List<ConnectionPoint> connections, BoundingBox bb, Rotation rotation, List<BlockPos> obstaclePositions) {
         buildings.add(new PlacedBuilding(defId, worldPos, bb, rotation, obstaclePositions));
@@ -259,7 +272,8 @@ public class Town {
         currentEraPath = t.id;
         if (!t.nextOrientation.isEmpty()) currentOrientation = t.nextOrientation;
         unlockedBuildingIds.addAll(t.unlockedBuildingIds);
-        if (t.unlockNewBuilder) targetBuilderCount++;
+        t.unlockNpcCounts.forEach((jobId, count) ->
+            targetNpcCounts.merge(jobId, count, Integer::sum));
         if (!t.autoUpgradeIds.isEmpty()) {
             for (PlacedBuilding b : buildings) {
                 if (t.autoUpgradeIds.contains(b.defId)) {
@@ -340,9 +354,70 @@ public class Town {
         for (ItemCost cost : def.constructionCost) {
             queueReservedStock.merge(cost.item(), cost.amount(), Integer::sum);
         }
-        constructionQueue.add(new QueueEntry.NewBuild(nextEntryId++, defId));
+        constructionQueue.add(new QueueEntry.NewBuild(nextEntryId++, defId, false));
         return true;
     }
+
+    // Like tryAddToConstructionQueue but marks the entry locked (autonomy-injected).
+    // Locked entries cannot be removed by the player and are tracked by EraManager.
+    public boolean tryAddToConstructionQueueLocked(String defId) {
+        BuildingDef def = BuildingDataHandler.get(defId).orElse(null);
+        if (def == null || constructionQueue.size() >= QUEUE_CAPACITY) return false;
+        if (getCurrentWeight() + def.weight > getCurrentMaxWeight()) return false;
+        TownInventory inv = getTownInventory();
+        for (ItemCost cost : def.constructionCost) {
+            if (inv.getStock(cost.item()) < cost.amount()) return false;
+        }
+        inv.removeStock(def.constructionCost);
+        for (ItemCost cost : def.constructionCost) {
+            queueReservedStock.merge(cost.item(), cost.amount(), Integer::sum);
+        }
+        constructionQueue.add(new QueueEntry.NewBuild(nextEntryId++, defId, true));
+        return true;
+    }
+
+    // Removes all locked NewBuild entries whose defId is absent from newSequence.
+    // Called when the player switches the autonomy path so orphaned locks are cancelled.
+    public void cancelOrphanedLockedEntries(List<String> newSequence) {
+        Set<String> sequenceIds = new HashSet<>(newSequence);
+        for (int i = constructionQueue.size() - 1; i >= 0; i--) {
+            QueueEntry entry = constructionQueue.get(i);
+            if (entry instanceof QueueEntry.NewBuild nb && nb.locked() && !sequenceIds.contains(nb.defId())) {
+                List<ItemCost> costToRefund = getEntryCost(entry);
+                for (ItemCost cost : costToRefund) {
+                    int reserved = queueReservedStock.getOrDefault(cost.item(), 0);
+                    int toRestore = Math.min(reserved, cost.amount());
+                    if (toRestore > 0) {
+                        queueReservedStock.put(cost.item(), reserved - toRestore);
+                        reserveStock.merge(cost.item(), toRestore, Integer::sum);
+                    }
+                }
+                constructionQueue.remove(i);
+                shiftClaimsAfter(i);
+            }
+        }
+    }
+
+    // Returns the next building defId from sequence that hasn't been fully satisfied
+    // (placed + queued). Handles duplicates: ["a", "b", "a"] correctly tracks count per slot.
+    public String getNextAutoBuildTarget(List<String> sequence) {
+        Map<String, Integer> seenCount = new HashMap<>();
+        for (String defId : sequence) {
+            int required = seenCount.merge(defId, 1, Integer::sum);
+            long placed = buildings.stream().filter(b -> b.defId.equals(defId)).count();
+            long queued = constructionQueue.stream()
+                .filter(e -> e instanceof QueueEntry.NewBuild nb && nb.defId().equals(defId))
+                .count();
+            if (placed + queued < required) return defId;
+        }
+        return null;
+    }
+
+    // Autonomy getters/setters
+    public boolean isAutonomyEnabled() { return autonomyEnabled; }
+    public void setAutonomyEnabled(boolean value) { this.autonomyEnabled = value; }
+    public String getAutonomyChosenTransitionId() { return autonomyChosenTransitionId; }
+    public void setAutonomyChosenTransitionId(String id) { this.autonomyChosenTransitionId = id; }
 
     // Checks affordability and appends an Upgrade entry to the queue.
     // Returns false if: building not found, already at max level, upgrade already pending,
@@ -380,7 +455,7 @@ public class Town {
         for (ItemCost c : cost) {
             queueReservedStock.merge(c.item(), c.amount(), Integer::sum);
         }
-        constructionQueue.add(new QueueEntry.Upgrade(nextEntryId++, building.defId, worldPos, effectiveLevel));
+        constructionQueue.add(new QueueEntry.Upgrade(nextEntryId++, building.defId, worldPos, effectiveLevel, false));
         return true;
     }
 
@@ -407,14 +482,16 @@ public class Town {
         if (effectiveLevel >= maxLevel) return false;
         if (constructionQueue.size() >= QUEUE_CAPACITY) return false;
 
-        constructionQueue.add(new QueueEntry.Upgrade(nextEntryId++, building.defId, worldPos, effectiveLevel));
+        constructionQueue.add(new QueueEntry.Upgrade(nextEntryId++, building.defId, worldPos, effectiveLevel, false));
         return true;
     }
 
     // Removes entry at index, restoring its reserved resources to the floating reserve.
+    // Locked entries (autonomy-injected) cannot be removed by the player.
     public boolean removeFromConstructionQueue(int index) {
         if (index < 0 || index >= constructionQueue.size()) return false;
         QueueEntry entry = constructionQueue.get(index);
+        if (entry.locked()) return false;
         List<ItemCost> costToRefund = getEntryCost(entry);
         for (ItemCost cost : costToRefund) {
             int reserved = queueReservedStock.getOrDefault(cost.item(), 0);
@@ -643,17 +720,40 @@ public class Town {
     public Map<Item, Integer> getReserveStock() { return reserveStock; }
 
     public List<PlacedBuilding> getBuildings() { return buildings; }
-    public List<UUID> getBuilderNpcIds() { return builderNpcIds; }
-    public int getTargetBuilderCount() { return targetBuilderCount; }
 
-    // Replaces the UUID at the given slot index (used by TickScheduler on respawn).
-    public void setBuilderNpcIdAtSlot(int slot, UUID id) {
-        while (builderNpcIds.size() <= slot) builderNpcIds.add(null);
-        builderNpcIds.set(slot, id);
+    public List<UUID> getNpcsByJob(String jobId) {
+        return npcsByJob.getOrDefault(jobId, List.of());
     }
 
-    // Returns the slot index for a given builder UUID, or -1 if not found.
-    public int getBuilderSlot(UUID id) { return builderNpcIds.indexOf(id); }
+    public int getTargetNpcCount(String jobId) {
+        return targetNpcCounts.getOrDefault(jobId, 0);
+    }
+
+    public Map<String, Integer> getTargetNpcCounts() {
+        return Collections.unmodifiableMap(targetNpcCounts);
+    }
+
+    public void incrementTargetNpcCount(String jobId) {
+        targetNpcCounts.merge(jobId, 1, Integer::sum);
+    }
+
+    // Replaces the UUID at the given slot index for a job (used by TickScheduler on spawn/respawn).
+    public void setNpcIdAtSlot(String jobId, int slot, UUID id) {
+        List<UUID> ids = npcsByJob.computeIfAbsent(jobId, k -> new ArrayList<>());
+        while (ids.size() <= slot) ids.add(null);
+        ids.set(slot, id);
+    }
+
+    // Returns the slot index for a given NPC UUID within a job list, or -1 if not found.
+    public int getNpcSlot(String jobId, UUID id) {
+        return npcsByJob.getOrDefault(jobId, List.of()).indexOf(id);
+    }
+
+    // Returns the UUID at the given slot for a job, or null if the slot is empty.
+    public UUID getNpcAtSlot(String jobId, int slot) {
+        List<UUID> ids = npcsByJob.getOrDefault(jobId, List.of());
+        return slot < ids.size() ? ids.get(slot) : null;
+    }
 
     public void setActiveBuild(int slot, ActiveBuildState state) {
         activeBuilds.put(slot, state);
@@ -708,14 +808,20 @@ public class Town {
     public CompoundTag toNbt() {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", name);
-        ListTag builderIdsTag = new ListTag();
-        for (UUID id : builderNpcIds) {
-            CompoundTag idTag = new CompoundTag();
-            if (id != null) idTag.putUUID("Id", id);
-            builderIdsTag.add(idTag);
+        CompoundTag npcsByJobTag = new CompoundTag();
+        for (Map.Entry<String, List<UUID>> je : npcsByJob.entrySet()) {
+            ListTag idsTag = new ListTag();
+            for (UUID id : je.getValue()) {
+                CompoundTag idTag = new CompoundTag();
+                if (id != null) idTag.putUUID("Id", id);
+                idsTag.add(idTag);
+            }
+            npcsByJobTag.put(je.getKey(), idsTag);
         }
-        tag.put("BuilderNpcIds", builderIdsTag);
-        tag.putInt("TargetBuilderCount", targetBuilderCount);
+        tag.put("NpcsByJob", npcsByJobTag);
+        CompoundTag countsTag = new CompoundTag();
+        targetNpcCounts.forEach(countsTag::putInt);
+        tag.put("TargetNpcCounts", countsTag);
         ListTag buildingsTag = new ListTag();
         buildings.forEach(b -> buildingsTag.add(b.toNbt()));
         tag.put("Buildings", buildingsTag);
@@ -780,23 +886,47 @@ public class Town {
         }
         tag.putLong("CpInsertionCounter", cpInsertionCounter);
         tag.putLong("NextEntryId", nextEntryId);
+        tag.putBoolean("AutonomyEnabled", autonomyEnabled);
+        tag.putString("AutonomyChosenTransitionId", autonomyChosenTransitionId);
         return tag;
     }
 
     public static Town fromNbt(CompoundTag tag) {
         Town town = new Town();
         town.name = tag.contains("Name") ? tag.getString("Name") : "Unknown Town";
-        // Backward compat: old saves stored a single BuilderNpcId UUID.
-        if (tag.hasUUID("BuilderNpcId")) {
-            town.builderNpcIds.add(tag.getUUID("BuilderNpcId"));
+        if (tag.contains("NpcsByJob")) {
+            // New format.
+            town.npcsByJob.clear();
+            town.targetNpcCounts.clear();
+            CompoundTag npcsByJobTag = tag.getCompound("NpcsByJob");
+            for (String jobId : npcsByJobTag.getAllKeys()) {
+                List<UUID> ids = new ArrayList<>();
+                npcsByJobTag.getList(jobId, Tag.TAG_COMPOUND).forEach(t -> {
+                    CompoundTag idTag = (CompoundTag) t;
+                    ids.add(idTag.hasUUID("Id") ? idTag.getUUID("Id") : null);
+                });
+                town.npcsByJob.put(jobId, ids);
+            }
+            if (tag.contains("TargetNpcCounts")) {
+                CompoundTag cTag = tag.getCompound("TargetNpcCounts");
+                for (String jobId : cTag.getAllKeys()) {
+                    town.targetNpcCounts.put(jobId, cTag.getInt(jobId));
+                }
+            }
+            if (!town.npcsByJob.containsKey("builder")) town.npcsByJob.put("builder", new ArrayList<>());
+            if (!town.targetNpcCounts.containsKey("builder")) town.targetNpcCounts.put("builder", 1);
+        } else {
+            // Backward compat: old saves stored BuilderNpcId / BuilderNpcIds / TargetBuilderCount.
+            List<UUID> builderIds = town.npcsByJob.get("builder");
+            if (tag.hasUUID("BuilderNpcId")) builderIds.add(tag.getUUID("BuilderNpcId"));
+            if (tag.contains("BuilderNpcIds")) {
+                tag.getList("BuilderNpcIds", Tag.TAG_COMPOUND).forEach(t -> {
+                    CompoundTag idTag = (CompoundTag) t;
+                    builderIds.add(idTag.hasUUID("Id") ? idTag.getUUID("Id") : null);
+                });
+            }
+            town.targetNpcCounts.put("builder", tag.contains("TargetBuilderCount") ? tag.getInt("TargetBuilderCount") : 1);
         }
-        if (tag.contains("BuilderNpcIds")) {
-            tag.getList("BuilderNpcIds", Tag.TAG_COMPOUND).forEach(t -> {
-                CompoundTag idTag = (CompoundTag) t;
-                town.builderNpcIds.add(idTag.hasUUID("Id") ? idTag.getUUID("Id") : null);
-            });
-        }
-        town.targetBuilderCount = tag.contains("TargetBuilderCount") ? tag.getInt("TargetBuilderCount") : 1;
         tag.getList("Buildings", Tag.TAG_COMPOUND)
             .forEach(t -> town.buildings.add(PlacedBuilding.fromNbt((CompoundTag) t)));
         tag.getList("FreeConnections", Tag.TAG_COMPOUND)
@@ -825,7 +955,7 @@ public class Town {
             } else {
                 // Backward compat: old saves stored plain string defIds
                 tag.getList("ConstructionQueue", Tag.TAG_STRING)
-                    .forEach(t -> town.constructionQueue.add(new QueueEntry.NewBuild(0L, t.getAsString())));
+                    .forEach(t -> town.constructionQueue.add(new QueueEntry.NewBuild(0L, t.getAsString(), false)));
             }
         }
         // Backward compat: old saves have no NextEntryId -- reassign sequential IDs to all entries.
@@ -836,9 +966,9 @@ public class Town {
             List<QueueEntry> restamped = new ArrayList<>();
             for (QueueEntry e : town.constructionQueue) {
                 if (e instanceof QueueEntry.NewBuild nb)
-                    restamped.add(new QueueEntry.NewBuild(seq++, nb.defId()));
+                    restamped.add(new QueueEntry.NewBuild(seq++, nb.defId(), nb.locked()));
                 else if (e instanceof QueueEntry.Upgrade u)
-                    restamped.add(new QueueEntry.Upgrade(seq++, u.defId(), u.buildingWorldPos(), u.fromLevel()));
+                    restamped.add(new QueueEntry.Upgrade(seq++, u.defId(), u.buildingWorldPos(), u.fromLevel(), u.locked()));
                 else restamped.add(e);
             }
             town.constructionQueue.clear();
@@ -899,6 +1029,8 @@ public class Town {
                 catch (IllegalArgumentException ignored) {}
             });
         }
+        town.autonomyEnabled = tag.contains("AutonomyEnabled") && tag.getBoolean("AutonomyEnabled");
+        town.autonomyChosenTransitionId = tag.contains("AutonomyChosenTransitionId") ? tag.getString("AutonomyChosenTransitionId") : "";
         return town;
     }
 

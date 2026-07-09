@@ -15,6 +15,7 @@ import net.minecraft.world.item.BlockItem;
 import org.dawnoftime.onceuponatown.command.TownCommand;
 import org.dawnoftime.onceuponatown.datapack.BuilderConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuildingDataHandler;
+import org.dawnoftime.onceuponatown.datapack.LumberjackConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuildingListDataHandler;
 import org.dawnoftime.onceuponatown.datapack.EraTransitionDataHandler;
 import org.dawnoftime.onceuponatown.datapack.FoodListDataHandler;
@@ -22,6 +23,7 @@ import org.dawnoftime.onceuponatown.datapack.QuestDataHandler;
 import org.dawnoftime.onceuponatown.datapack.TradePriceDataHandler;
 import org.dawnoftime.onceuponatown.entity.Npc;
 import org.dawnoftime.onceuponatown.network.C2SAdvanceEraPacket;
+import org.dawnoftime.onceuponatown.network.C2SSelectEraPathPacket;
 import org.dawnoftime.onceuponatown.network.C2SBuyPacket;
 import org.dawnoftime.onceuponatown.network.C2SDepositPacket;
 import org.dawnoftime.onceuponatown.network.C2SContributeQuestPacket;
@@ -62,6 +64,7 @@ public class OuatFabric implements ModInitializer {
         CommandRegistrationCallback.EVENT.register((dispatcher, context, env) ->
             TownCommand.register(dispatcher, context));
         ServerLifecycleEvents.SERVER_STARTING.register(BuilderConfigDataHandler::reload);
+        ServerLifecycleEvents.SERVER_STARTING.register(LumberjackConfigDataHandler::reload);
         ServerLifecycleEvents.SERVER_STARTING.register(BuildingDataHandler::reload);
         ServerLifecycleEvents.SERVER_STARTING.register(BuildingListDataHandler::reload);
         ServerLifecycleEvents.SERVER_STARTING.register(EraTransitionDataHandler::reload);
@@ -108,6 +111,11 @@ public class OuatFabric implements ModInitializer {
             (server, player, handler, buf, responseSender) -> {
                 C2SVerifyClearancePacket packet = C2SVerifyClearancePacket.decode(buf);
                 server.execute(() -> C2SVerifyClearancePacket.Handler.handle(packet, player));
+            });
+        ServerPlayNetworking.registerGlobalReceiver(C2SSelectEraPathPacket.ID,
+            (server, player, handler, buf, responseSender) -> {
+                C2SSelectEraPathPacket packet = C2SSelectEraPathPacket.decode(buf);
+                server.execute(() -> C2SSelectEraPathPacket.Handler.handle(packet, player));
             });
         ServerPlayNetworking.registerGlobalReceiver(C2SRequestStockPacket.ID,
             (server, player, handler, buf, responseSender) -> {

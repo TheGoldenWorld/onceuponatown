@@ -1,6 +1,8 @@
-package org.dawnoftime.onceuponatown.entity.ai;
+package org.dawnoftime.onceuponatown.entity.ai.builder;
 
 import net.minecraft.core.BlockPos;
+import org.dawnoftime.onceuponatown.entity.ai.ActivityDef;
+import org.dawnoftime.onceuponatown.entity.ai.shared.GoToPosition;
 import org.dawnoftime.onceuponatown.town.PlacedBuilding;
 
 public class ActivityInstance {

@@ -45,6 +45,7 @@ public class TownHubDataBuilder {
         hub.putString("CurrentOrientation", town.getOrDeriveOrientation());
         hub.putInt("CurrentWeight", town.getCurrentWeight());
         hub.putInt("MaxWeight", town.getCurrentMaxWeight());
+        hub.putString("AutonomyChosenTransitionId", town.getAutonomyChosenTransitionId());
 
         ListTag eraTransitionsTag = new ListTag();
         TownInventory invForEra = town.getTownInventory();
@@ -181,6 +182,7 @@ public class TownHubDataBuilder {
         tag.putString("CurrentOrientation", town.getOrDeriveOrientation());
         tag.putInt("CurrentWeight", town.getCurrentWeight());
         tag.putInt("MaxWeight", town.getCurrentMaxWeight());
+        tag.putString("AutonomyChosenTransitionId", town.getAutonomyChosenTransitionId());
         ListTag eraTransitionsTag = new ListTag();
         TownInventory invForEra = town.getTownInventory();
         for (EraTransitionDef t : town.getAvailableTransitions()) {

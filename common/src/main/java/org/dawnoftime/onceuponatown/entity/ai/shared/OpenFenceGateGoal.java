@@ -1,4 +1,4 @@
-package org.dawnoftime.onceuponatown.entity.ai;
+package org.dawnoftime.onceuponatown.entity.ai.shared;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;

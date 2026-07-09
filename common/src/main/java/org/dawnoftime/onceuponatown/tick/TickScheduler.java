@@ -52,35 +52,40 @@ public class TickScheduler {
                     if (!playerNearby) continue;
 
                     boolean dirty = false;
-                    List<UUID> ids = town.getBuilderNpcIds();
-                    for (int slot = 0; slot < town.getTargetBuilderCount(); slot++) {
-                        UUID slotId = slot < ids.size() ? ids.get(slot) : null;
-                        net.minecraft.world.entity.Entity existing = slotId != null ? level.getEntity(slotId) : null;
-                        if (existing != null) continue;
+                    for (Map.Entry<String, Integer> jobEntry : town.getTargetNpcCounts().entrySet()) {
+                        String jobId = jobEntry.getKey();
+                        int targetCount = jobEntry.getValue();
+                        List<UUID> ids = town.getNpcsByJob(jobId);
+                        for (int slot = 0; slot < targetCount; slot++) {
+                            UUID slotId = slot < ids.size() ? ids.get(slot) : null;
+                            net.minecraft.world.entity.Entity existing = slotId != null ? level.getEntity(slotId) : null;
+                            if (existing != null) continue;
 
-                        // NPC not found in loaded entities. Check if the NPC's chunk is simply unloaded
-                        // before spawning a replacement -- the builder is immortal so absence = chunk not loaded.
-                        ActiveBuildState buildState = town.getActiveBuild(slot);
-                        BlockPos checkPos = buildState != null ? buildState.placementPos() : anchorPos;
-                        if (!areChunksLoaded(level, checkPos)) continue;
+                            // NPC not found in loaded entities. Check if the NPC's chunk is simply unloaded
+                            // before spawning a replacement -- the NPC is immortal so absence = chunk not loaded.
+                            ActiveBuildState buildState = town.getActiveBuild(slot);
+                            BlockPos checkPos = buildState != null ? buildState.placementPos() : anchorPos;
+                            if (!areChunksLoaded(level, checkPos)) continue;
 
-                        // All 9 chunks around the expected position are loaded but NPC is still missing:
-                        // coherence issue (e.g. entity deleted externally). Spawn a replacement.
-                        // Release any queue claims the dead builder held so the new one can resume.
-                        if (slotId != null) town.releaseAllClaimsForBuilder(slotId);
-                        Npc builder = EntityRegistry.NPC.create(level);
-                        if (builder == null) continue;
+                            // All 9 chunks around the expected position are loaded but NPC is still missing:
+                            // coherence issue (e.g. entity deleted externally). Spawn a replacement.
+                            // Release any queue claims the dead NPC held so the new one can resume.
+                            if (slotId != null) town.releaseAllClaimsForBuilder(slotId);
+                            Npc npc = EntityRegistry.NPC.create(level);
+                            if (npc == null) continue;
 
-                        builder.setPersistenceRequired();
-                        builder.setTownAnchorPos(anchorPos);
+                            npc.setPersistenceRequired();
+                            npc.setJobId(jobId);
+                            npc.setTownAnchorPos(anchorPos);
 
-                        int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                            anchorPos.getX(), anchorPos.getZ());
-                        builder.moveTo(anchorPos.getX() + 0.5, surfaceY + 1.0, anchorPos.getZ() + 0.5);
+                            int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                                anchorPos.getX(), anchorPos.getZ());
+                            npc.moveTo(anchorPos.getX() + 0.5, surfaceY + 1.0, anchorPos.getZ() + 0.5);
 
-                        if (level.addFreshEntity(builder)) {
-                            town.setBuilderNpcIdAtSlot(slot, builder.getUUID());
-                            dirty = true;
+                            if (level.addFreshEntity(npc)) {
+                                town.setNpcIdAtSlot(jobId, slot, npc.getUUID());
+                                dirty = true;
+                            }
                         }
                     }
                     if (dirty) levelTowns.markDirty();

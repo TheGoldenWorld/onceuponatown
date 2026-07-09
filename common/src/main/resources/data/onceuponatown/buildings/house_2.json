@@ -12,6 +12,10 @@
     {
       "item": "minecraft:oak_log",
       "amount": 20
+    },
+    {
+      "item": "minecraft:white_bed",
+      "amount": 2
     }
   ],
   "nbt_levels": [

@@ -6,8 +6,6 @@
   "category": "jobs",
   "weight": 4,
 
-
-
   "construction_cost": [
     {
       "item": "minecraft:oak_log",
@@ -15,7 +13,7 @@
     },
     {
       "item": "minecraft:cobblestone",
-      "amount": 35
+      "amount": 55
     }
   ],
   "production": [

@@ -33,11 +33,15 @@ public class BuilderConfigDataHandler {
         public final int planReadMinTicks;
         public final int planReadMaxTicks;
         public final List<ActivityDef> secondaryActivities;
+        public final int bedtime;
+        public final int wakeupTime;
+        public final List<String> restBuildings;
 
         public Config(double walkSpeed, double blockReachDistance, int blockDelayTicks,
                       int burstPauseMinTicks, int burstPauseMaxTicks, int maxBurstExtraBlocks,
                       float planReadChance, int planReadMinTicks, int planReadMaxTicks,
-                      List<ActivityDef> secondaryActivities) {
+                      List<ActivityDef> secondaryActivities,
+                      int bedtime, int wakeupTime, List<String> restBuildings) {
             this.walkSpeed = walkSpeed;
             this.blockReachDistance = blockReachDistance;
             this.blockDelayTicks = blockDelayTicks;
@@ -48,11 +52,14 @@ public class BuilderConfigDataHandler {
             this.planReadMinTicks = planReadMinTicks;
             this.planReadMaxTicks = planReadMaxTicks;
             this.secondaryActivities = secondaryActivities;
+            this.bedtime = bedtime;
+            this.wakeupTime = wakeupTime;
+            this.restBuildings = restBuildings;
         }
     }
 
     private static final Config DEFAULTS = new Config(
-        0.6, 6.0, 4, 10, 18, 2, 0.05f, 15, 35, List.of()
+        0.6, 6.0, 4, 10, 18, 2, 0.05f, 15, 35, List.of(), -1, -1, List.of()
     );
 
     private static Config loaded = DEFAULTS;
@@ -80,6 +87,15 @@ public class BuilderConfigDataHandler {
                     ));
                 }
             }
+            List<String> restBuildings = new ArrayList<>();
+            if (json.has("rest_buildings")) {
+                json.getAsJsonArray("rest_buildings")
+                    .forEach(e -> restBuildings.add(e.getAsString()));
+            }
+
+            int bedtime    = json.has("bedtime")      ? json.get("bedtime").getAsInt()      : -1;
+            int wakeupTime = json.has("wakeup_time")  ? json.get("wakeup_time").getAsInt()  : -1;
+
             loaded = new Config(
                 getDbl(json, "walk_speed",                     DEFAULTS.walkSpeed),
                 getDbl(json, "block_reach_distance",           DEFAULTS.blockReachDistance),
@@ -90,7 +106,10 @@ public class BuilderConfigDataHandler {
                 getFlt(json, "plan_read_chance",               DEFAULTS.planReadChance),
                 getInt(json, "plan_read_min_ticks",            DEFAULTS.planReadMinTicks),
                 getInt(json, "plan_read_max_ticks",            DEFAULTS.planReadMaxTicks),
-                activities
+                activities,
+                bedtime,
+                wakeupTime,
+                restBuildings
             );
         } catch (Exception e) {
             LOGGER.error("[OUAT] Failed to load builder config {}: {} -- using defaults", location, e.getMessage());

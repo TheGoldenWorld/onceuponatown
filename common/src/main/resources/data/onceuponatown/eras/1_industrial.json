@@ -13,8 +13,10 @@
   "required_buildings": [
     { "defId": "wild_stone", "count": 2 },
     { "defId": "workshop", "count": 1 }
-
   ],
-  "unlocked_building_ids": ["sheep_field", "stone_breach", "lumberjack", "wild_spot"],
+
+  "auto_build_sequence": ["grove", "wild_stone", "wild_crops", "workshop", "wheat_field", "wild_stone", "sheep_field", "house_2"],
+
+  "unlocked_building_ids": ["oven", "stone_breach", "lumberjack", "wild_spot"],
   "auto_upgrade_ids": ["settlement"]
 }

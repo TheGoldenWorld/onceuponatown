@@ -14,11 +14,13 @@
 
   "required_residents": 5,
   "required_buildings": [
-    { "defId": "leather_workshop", "count": 1 }
+    { "defId": "pig_farm", "count": 1 }
   ],
 
-  "auto_upgrade_ids": ["settlement_2"],
+  "auto_build_sequence": ["pig_field", "cow_field", "pig_field", "pig_farm", "house"],
 
+  "auto_upgrade_ids": ["settlement_2"],
+  "unlocked_building_ids": ["leather_workshop"],
 
   "next_orientation": "ranching"
 }

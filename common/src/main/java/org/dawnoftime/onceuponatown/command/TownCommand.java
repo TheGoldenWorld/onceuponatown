@@ -17,12 +17,21 @@ public class TownCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher,
                                  CommandBuildContext context) {
-        // /ouat town status is accessible by any player (no op required)
         dispatcher.register(
             Commands.literal("ouat")
                 .then(Commands.literal("town")
+                    // /ouat town status: accessible by any player
                     .then(Commands.literal("status")
-                        .executes(TownCommand::status)))
+                        .executes(TownCommand::status))
+                    // /ouat town autonomy: requires op level 2
+                    .then(Commands.literal("autonomy")
+                        .requires(src -> src.hasPermission(2))
+                        .then(Commands.literal("enable")
+                            .executes(ctx -> autonomySet(ctx, true)))
+                        .then(Commands.literal("disable")
+                            .executes(ctx -> autonomySet(ctx, false)))
+                        .then(Commands.literal("status")
+                            .executes(TownCommand::autonomyStatus))))
         );
     }
 
@@ -56,6 +65,36 @@ public class TownCommand {
 
         String result = sb.toString();
         ctx.getSource().sendSuccess(() -> Component.literal(result), false);
+        return 1;
+    }
+
+    private static int autonomySet(CommandContext<CommandSourceStack> ctx, boolean enable) throws CommandSyntaxException {
+        ServerLevel level = ctx.getSource().getLevel();
+        BlockPos pos = BlockPos.containing(ctx.getSource().getPosition());
+        Town town = LevelTowns.get(level).getNearestTown(pos, 128).orElse(null);
+        if (town == null) {
+            ctx.getSource().sendFailure(Component.literal("[OUAT] No town within 128 blocks"));
+            return 0;
+        }
+        town.setAutonomyEnabled(enable);
+        LevelTowns.get(level).markDirty();
+        String state = enable ? "enabled" : "disabled";
+        ctx.getSource().sendSuccess(() -> Component.literal("[OUAT] Village autonomy " + state), true);
+        return 1;
+    }
+
+    private static int autonomyStatus(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerLevel level = ctx.getSource().getLevel();
+        BlockPos pos = BlockPos.containing(ctx.getSource().getPosition());
+        Town town = LevelTowns.get(level).getNearestTown(pos, 128).orElse(null);
+        if (town == null) {
+            ctx.getSource().sendFailure(Component.literal("[OUAT] No town within 128 blocks"));
+            return 0;
+        }
+        String enabled = town.isAutonomyEnabled() ? "enabled" : "disabled";
+        String chosen = town.getAutonomyChosenTransitionId().isEmpty() ? "none" : town.getAutonomyChosenTransitionId();
+        String msg = "[OUAT] Autonomy: " + enabled + " | chosen path: " + chosen;
+        ctx.getSource().sendSuccess(() -> Component.literal(msg), false);
         return 1;
     }
 }

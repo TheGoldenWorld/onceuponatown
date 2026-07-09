@@ -17,8 +17,11 @@
     { "defId": "wheat_farm", "count": 1 }
   ],
 
-  "auto_upgrade_ids": ["settlement_3"],
+  "auto_build_sequence": ["wheat_farm", "house"],
 
+
+  "auto_upgrade_ids": ["settlement_3"],
+  "unlocked_building_ids": ["granary"],
 
   "next_orientation": "rural"
 }

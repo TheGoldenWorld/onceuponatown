@@ -14,13 +14,14 @@
 
   "required_residents": 4,
   "required_buildings": [
-    { "defId": "oven", "count": 1 },
-    { "defId": "bee_field", "count": 1 }
+    { "defId": "oven", "count": 1 }
+  ],
 
-  ],  "unlocked_building_ids": ["lone_place", "carpenter", "beekeeper", "kitchen"],
-  "unlock_new_builder": true,
+  "auto_build_sequence": ["oven", "lumberjack", "bee_field", "bee_field", "house_3"],
+
+  "unlocked_building_ids": ["lone_place", "carpenter", "bee_field", "kitchen"],
+  "unlock_npc_counts": { "builder": 1 },
   "auto_upgrade_ids": ["settlement_2"],
-
 
   "next_orientation": "cooking"
 }

@@ -185,7 +185,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
     private record ProductionCell(Item item, int amount, boolean locked) {}
     private record UpgradeBuildingEntry(String defId, long worldPosLong, int upgradeLevel,
                                         String category, String iconItem) {}
-    private record ClientQueueEntry(String type, String defId, long buildingWorldPos) {
+    private record ClientQueueEntry(String type, String defId, long buildingWorldPos, boolean locked) {
         boolean isUpgrade() { return "upgrade".equals(type); }
     }
 
@@ -249,7 +249,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                 int startY = (savedEraY >= 0) ? savedEraY : centerY(this.height, DraggableWidget.TITLE_BAR_H + 80);
                 eraWidget = new EraProgressDraggableWidget(startX, startY, freeZoneW, this.height,
                     currentEra, eraTransitions,
-                    pathId -> NetworkHelper.sendAdvanceEraPacket.accept(anchorPos, pathId));
+                    pathId -> NetworkHelper.sendAdvanceEraPacket.accept(anchorPos, pathId),
+                    pathId -> NetworkHelper.sendSelectEraPathPacket.accept(anchorPos, pathId));
                 newWidgets.add(eraWidget);
             }
             if (savedQuestHubOpen) {
@@ -303,7 +304,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
             String type = qt.getString("Type");
             String defId = qt.getString("DefId");
             long worldPos = "upgrade".equals(type) ? qt.getLong("BuildingWorldPos") : 0L;
-            constructionQueueClient.add(new ClientQueueEntry(type, defId, worldPos));
+            boolean locked = qt.contains("Locked") && qt.getBoolean("Locked");
+            constructionQueueClient.add(new ClientQueueEntry(type, defId, worldPos, locked));
         });
 
         parseBuildingCatalog(hub);
@@ -338,9 +340,12 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
             ));
         });
 
-        // Update era widget with fresh data
+        // Update era widget with fresh data and apply server-driven pre-selection if needed
         if (eraWidget != null) {
             eraWidget.updateData(currentEra, eraTransitions);
+            if (hub.contains("AutonomyChosenTransitionId")) {
+                eraWidget.applyServerPreselection(hub.getString("AutonomyChosenTransitionId"));
+            }
         }
         // Play firework sound when era advances
         if (lastKnownEra >= 0 && currentEra > prevEra) {
@@ -549,7 +554,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
             String type = qt.getString("Type");
             String defId = qt.getString("DefId");
             long worldPos = "upgrade".equals(type) ? qt.getLong("BuildingWorldPos") : 0L;
-            constructionQueueClient.add(new ClientQueueEntry(type, defId, worldPos));
+            boolean locked = qt.contains("Locked") && qt.getBoolean("Locked");
+            constructionQueueClient.add(new ClientQueueEntry(type, defId, worldPos, locked));
         });
 
         // Update upgrade buildings list
@@ -591,7 +597,12 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         currentWeight  = data.getInt("CurrentWeight");
         maxWeight      = data.getInt("MaxWeight");
         eraTransitions = parseEraTransitions(data);
-        if (eraWidget != null) eraWidget.updateData(currentEra, eraTransitions);
+        if (eraWidget != null) {
+            eraWidget.updateData(currentEra, eraTransitions);
+            if (data.contains("AutonomyChosenTransitionId")) {
+                eraWidget.applyServerPreselection(data.getString("AutonomyChosenTransitionId"));
+            }
+        }
         if (data.contains("BuildingCatalog")) {
             parseBuildingCatalog(data);
             catalogScrollOffset = 0;
@@ -843,7 +854,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         // Zone C: single queue row at row 1 (row 0 = weight bar)
         for (int col = 0; col < QUEUE_COLS; col++) {
             int sx = leftPos + QUEUE_GRID_X + col * CELL;
-            int sy = topPos + QUEUE_GRID_Y + CELL - 5;
+            int sy = topPos + QUEUE_GRID_Y + CELL - 4;
 
             if (col < constructionQueueClient.size()) {
                 ClientQueueEntry qe = constructionQueueClient.get(col);
@@ -856,6 +867,12 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                     g.pose().translate(0, 0, 300);
                     String badge = "UP";
                     g.drawString(font, badge, sx + CELL - 2 - font.width(badge) - 1, sy + CELL - 10, 0xFF55FFFF, true);
+                    g.pose().popPose();
+                }
+                if (qe.locked()) {
+                    g.pose().pushPose();
+                    g.pose().translate(0, 0, 300);
+                    drawPadlockIcon(g, sx + 4, sy + 2);
                     g.pose().popPose();
                 }
             } else {
@@ -1010,7 +1027,11 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
             } else {
                 lines.add(Component.literal(formatId(qe.defId())).withStyle(s -> s.withBold(true)));
             }
-            lines.add(Component.literal("Shift + Right-click to remove").withStyle(s -> s.withColor(0x888888)));
+            if (qe.locked()) {
+                lines.add(Component.literal("Village-locked").withStyle(s -> s.withColor(0xFFAA00)));
+            } else {
+                lines.add(Component.literal("Shift + Right-click to remove").withStyle(s -> s.withColor(0x888888)));
+            }
             g.renderComponentTooltip(font, lines, mx, my);
         } else if (hoveredCatalogSlot >= 0 && hoveredCatalogSlot < visibleCatalog.size()) {
             BuildingEntry entry = visibleCatalog.get(hoveredCatalogSlot);
@@ -1575,7 +1596,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                     int startY = (savedEraY >= 0) ? savedEraY : centerY(this.height, DraggableWidget.TITLE_BAR_H + 80);
                     eraWidget = new EraProgressDraggableWidget(startX, startY, freeZoneW, this.height,
                         currentEra, eraTransitions,
-                        pathId -> NetworkHelper.sendAdvanceEraPacket.accept(anchorPos, pathId));
+                        pathId -> NetworkHelper.sendAdvanceEraPacket.accept(anchorPos, pathId),
+                        pathId -> NetworkHelper.sendSelectEraPathPacket.accept(anchorPos, pathId));
                     layer1Widgets.add(0, eraWidget);
                     savedEraOpen = true;
                     eraClosed = false;
@@ -1650,7 +1672,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         if (activeTab == 1) {
             // Queue slot: shift + right-click removes
             if (button == 1 && hasShiftDown() && hoveredQueueSlot >= 0
-                    && hoveredQueueSlot < constructionQueueClient.size()) {
+                    && hoveredQueueSlot < constructionQueueClient.size()
+                    && !constructionQueueClient.get(hoveredQueueSlot).locked()) {
                 NetworkHelper.sendRemoveQueuedBuildingPacket.accept(anchorPos, hoveredQueueSlot);
                 return true;
             }

@@ -1,0 +1,8 @@
+{
+  "walk_speed": 0.6,
+  "chop_delay_ticks": 12,
+  "wood_source_buildings": ["grove", "sheep_field", "pig_field"],
+  "bedtime": 13000,
+  "wakeup_time": 1000,
+  "rest_buildings": ["lumberjack"]
+}

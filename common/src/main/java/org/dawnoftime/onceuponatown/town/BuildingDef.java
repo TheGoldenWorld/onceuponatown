@@ -59,6 +59,8 @@ public class BuildingDef {
     public final int weight;
     // Block IDs scanned when verifying a SITE_CLEARANCE quest. Empty = no clearance quest.
     public final List<String> obstacleBlocks;
+    // Job id of the NPC spawned when this building is placed. Null = no NPC spawn.
+    public final String spawnsNpcJob;
 
     // One upgrade step: cost + what it changes. All fields are additive deltas.
     public record UpgradeLevel(float cadenceMultiplier, int capacityStacksAdd, int amountAdd,
@@ -88,7 +90,7 @@ public class BuildingDef {
                        int requiredResidents, List<BuildingRequirement> requiredBuildings,
                        float consumptionPerResident, List<ItemCost> initialStock,
                        int herd, float consumptionPerHerd, int weight,
-                       List<String> obstacleBlocks) {
+                       List<String> obstacleBlocks, String spawnsNpcJob) {
         this.id = id;
         this.nbt = nbt;
         this.entryPool = entryPool;
@@ -114,6 +116,7 @@ public class BuildingDef {
         this.consumptionPerHerd = consumptionPerHerd;
         this.weight = weight;
         this.obstacleBlocks = obstacleBlocks;
+        this.spawnsNpcJob = spawnsNpcJob;
     }
 
     // Returns effective production, cadence, residents, consumption, herd, and herd consumption at a given upgrade level.

@@ -201,11 +201,13 @@ public class BuildingDataHandler {
             }
         }
 
+        String spawnsNpcJob = json.has("spawns_npc") ? json.get("spawns_npc").getAsString() : null;
+
         return new BuildingDef(id, nbt, entryPool, production, costs, terrainMatching, iconItem, category, footprint,
             transformations, transformInputRatio, transformEveryTicks,
             productionBonus, stockBonus, residents, upgrades, nbtLevels,
             requiredResidents, requiredBuildings, consumptionPerResident, initialStock,
-            herd, consumptionPerHerd, weight, obstacleBlocks);
+            herd, consumptionPerHerd, weight, obstacleBlocks, spawnsNpcJob);
     }
 
     // Builds the NBT payload sent to the client on player join (upgrade info only).

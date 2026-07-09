@@ -11,8 +11,11 @@
   ],
   "required_residents": 2,
   "required_buildings": [
-    { "defId": "pig_field", "count": 1 }
+    { "defId": "sheep_field", "count": 1 }
   ],
-  "unlocked_building_ids": ["sheep_field", "cow_field", "bee_field", "lumberjack", "wild_spot"],
+
+  "auto_build_sequence": ["grove", "wild_stone", "wild_crops", "workshop", "wheat_field", "sheep_field", "house_2"],
+
+  "unlocked_building_ids": ["oven", "pig_field", "lumberjack", "wild_spot"],
   "auto_upgrade_ids": ["settlement_2"]
 }

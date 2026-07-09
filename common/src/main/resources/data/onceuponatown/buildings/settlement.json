@@ -55,6 +55,9 @@
     },
     {
       "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 80 }]
+    },
+    {
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 100 }]
     }
   ],
   "nbt_levels": [
@@ -62,7 +65,9 @@
     "onceuponatown:plains/starters/settlement_lvl2",
     "onceuponatown:plains/starters/settlement_lvl3",
     "onceuponatown:plains/starters/settlement_lvl4",
-    "onceuponatown:plains/starters/settlement_lvl5"
+    "onceuponatown:plains/starters/settlement_lvl5",
+    "onceuponatown:plains/starters/settlement_lvl6"
+
 
   ]
 }

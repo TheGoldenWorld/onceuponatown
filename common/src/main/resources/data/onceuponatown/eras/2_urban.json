@@ -12,14 +12,17 @@
     { "item": "minecraft:cobblestone", "amount": 10 }
   ],
 
-  "required_residents": 7,
+  "required_residents": 6,
   "required_buildings": [
     { "defId": "wild_spot", "count": 1 }
   ],
-  "unlocked_building_ids": ["lone_garden", "carpenter", "merchant_shop", "lone_place", "fountain_place"],
-  "unlock_new_builder": true,
-  "auto_upgrade_ids": ["settlement_3"],
 
+  "auto_build_sequence": ["oven", "lumberjack", "house_3", "wild_spot", "house_2", "house_3", "house_2"],
+
+
+  "unlocked_building_ids": ["lone_garden", "carpenter", "merchant_shop", "lone_place", "fountain_place"],
+  "unlock_npc_counts": { "builder": 1 },
+  "auto_upgrade_ids": ["settlement_3"],
 
   "next_orientation": "urban"
 }

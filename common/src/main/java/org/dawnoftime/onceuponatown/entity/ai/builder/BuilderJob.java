@@ -1,18 +1,19 @@
-package org.dawnoftime.onceuponatown.entity.ai;
+package org.dawnoftime.onceuponatown.entity.ai.builder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import org.dawnoftime.onceuponatown.Constants;
@@ -21,6 +22,11 @@ import org.dawnoftime.onceuponatown.building.schematic.JigsawConnector;
 import org.dawnoftime.onceuponatown.datapack.BuilderConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuildingDataHandler;
 import org.dawnoftime.onceuponatown.entity.Npc;
+import org.dawnoftime.onceuponatown.entity.ai.ActivityDef;
+import org.dawnoftime.onceuponatown.entity.ai.AnimationType;
+import org.dawnoftime.onceuponatown.entity.ai.NpcJob;
+import org.dawnoftime.onceuponatown.entity.ai.shared.ConnectionPointYResolver;
+import org.dawnoftime.onceuponatown.entity.ai.shared.GoToPosition;
 import org.dawnoftime.onceuponatown.network.NetworkHelper;
 import org.dawnoftime.onceuponatown.town.ActiveBuildState;
 import org.dawnoftime.onceuponatown.town.BuildingDef;
@@ -40,11 +46,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-public class SimpleStateMachine {
+public class BuilderJob implements NpcJob {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(SimpleStateMachine.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(BuilderJob.class);
 
-    public enum State { IDLE, BUILD, ACTIVITY }
+    public enum State { IDLE, BUILD, ACTIVITY, SLEEPING }
 
     private final Npc npc;
     private State current = State.IDLE;
@@ -57,6 +63,10 @@ public class SimpleStateMachine {
     // DefIds that have already received a suppressed skip message this session.
     // Cleared when the defId is placed or falls out of the queue.
     private final Set<String> warnedDefIds = new HashSet<>();
+
+    // Sleep state fields -- reset to null whenever SLEEPING is exited.
+    private BlockPos sleepBedPos = null;
+    private GoToPosition sleepGoTo = null;
 
     private enum QueueScanResult { STARTED_BUILD, BLOCKED, ALL_CLAIMED, EMPTY }
 
@@ -82,17 +92,45 @@ public class SimpleStateMachine {
         boolean succeeded() { return success != null; }
     }
 
-    public SimpleStateMachine(Npc npc) {
+    public BuilderJob(Npc npc) {
         this.npc = npc;
     }
 
+    @Override
+    public String getJobId() { return "builder"; }
+
     public State getState() { return current; }
 
+    @Override
     public void tick() {
+        // Resolve level once for the sleep checks; sub-methods do their own cast internally.
+        if (npc.level() instanceof ServerLevel level) {
+            BuilderConfigDataHandler.Config cfg = BuilderConfigDataHandler.get();
+            long dayTime = level.getDayTime() % 24000;
+
+            // After a server restart the entity's sleeping pose is restored from NBT but the
+            // job state machine resets to IDLE. Resync: if the NPC is still in bed and it is
+            // still sleep time, re-enter SLEEPING; otherwise clear the pose so it stands up.
+            if (npc.isSleeping() && current != State.SLEEPING) {
+                if (cfg.bedtime >= 0 && isSleepTime(dayTime, cfg)) {
+                    current = State.SLEEPING;
+                    sleepBedPos = npc.getSleepingPos().orElse(null);
+                } else {
+                    npc.stopSleeping();
+                }
+            }
+
+            // Trigger sleep from any active state when bedtime is reached.
+            if (cfg.bedtime >= 0 && current != State.SLEEPING && isSleepTime(dayTime, cfg)) {
+                enterSleep();
+            }
+        }
+
         switch (current) {
-            case IDLE -> tickIdle();
-            case BUILD -> tickBuild();
+            case IDLE     -> tickIdle();
+            case BUILD    -> tickBuild();
             case ACTIVITY -> tickActivity();
+            case SLEEPING -> tickSleeping();
         }
     }
 
@@ -100,15 +138,15 @@ public class SimpleStateMachine {
         // On each idle tick, check if Town has a saved build state for this builder's slot.
         // Runs first so the NPC resumes immediately on the first tick after a world reload.
         if (npc.level() instanceof ServerLevel resumeLevel) {
-            Town resumeTown = findTown(resumeLevel);
+            Town resumeTown = findTown(resumeLevel, npc);
             if (resumeTown != null) {
-                int mySlot = resumeTown.getBuilderSlot(npc.getUUID());
+                int mySlot = resumeTown.getNpcSlot("builder", npc.getUUID());
                 ActiveBuildState saved = resumeTown.getActiveBuild(mySlot);
                 if (saved != null) {
                     BuildGoal resumed = BuildGoal.fromActiveBuildState(saved, npc, resumeTown, resumeLevel);
                     if (resumed != null) {
                         QueueEntry tentativeEntry = saved.queueDefId() != null
-                            ? new QueueEntry.NewBuild(saved.queueEntryId(), saved.queueDefId()) : null;
+                            ? new QueueEntry.NewBuild(saved.queueEntryId(), saved.queueDefId(), false) : null;
                         // If this entry is already claimed by another builder (e.g. after a reload
                         // where claims were lost and another builder scanned first), discard the
                         // stale save so we don't double-build the same queue entry.
@@ -141,7 +179,7 @@ public class SimpleStateMachine {
 
         if (!(npc.level() instanceof ServerLevel serverLevel)) return;
 
-        Town town = findTown(serverLevel);
+        Town town = findTown(serverLevel, npc);
         if (town == null) return;
 
         if (town.getConstructionQueue().isEmpty()) {
@@ -150,7 +188,7 @@ public class SimpleStateMachine {
         }
 
         List<ConnectionPoint> freePoints = town.getAvailableConnectionPoints();
-        if (freePoints.isEmpty()) return;
+        if (freePoints.isEmpty()) { maybeWander(); return; }
 
         List<BoundingBox> occupied = town.getOccupiedBoxes();
 
@@ -263,7 +301,7 @@ public class SimpleStateMachine {
             int noConnector = 0;
 
             for (ConnectionPoint point : matchingCps) {
-                ConnectionPoint corrected = correctConnectionPointY(serverLevel, point);
+                ConnectionPoint corrected = ConnectionPointYResolver.correct(serverLevel, point);
                 PlacementOutcome outcome = attemptPlacement(serverLevel, corrected, occupied, def);
                 if (outcome.succeeded()) {
                     PlacementSuccess s = outcome.success();
@@ -274,7 +312,7 @@ public class SimpleStateMachine {
                         def, corrected, s.pos(), s.rotation(), s.entryConnectorWorldPos(), List.of(), town));
                     if (s.bb() != null) town.addUnderConstruction(def.id, s.pos(), s.bb(), s.rotation());
                     activeQueueEntry = entry;
-                    int mySlotQ = town.getBuilderSlot(myId);
+                    int mySlotQ = town.getNpcSlot("builder", myId);
                     if (mySlotQ >= 0) {
                         town.setActiveBuild(mySlotQ, new ActiveBuildState(
                             def.id, s.pos(), s.rotation(), corrected.pos(), corrected.direction(),
@@ -358,7 +396,7 @@ public class SimpleStateMachine {
 
         // Try each street CP from oldest to newest. Pass 0 = preferred, pass 1 = fallback safety net.
         for (ConnectionPoint chosen : streetCps) {
-            ConnectionPoint correctedChosen = correctConnectionPointY(serverLevel, chosen);
+            ConnectionPoint correctedChosen = ConnectionPointYResolver.correct(serverLevel, chosen);
             for (int pass = 0; pass < 2; pass++) {
                 List<BuildingDef> batch = (pass == 0) ? preferred : fallback;
                 if (batch.isEmpty()) continue;
@@ -373,7 +411,7 @@ public class SimpleStateMachine {
                             candidate, correctedChosen, s.pos(), s.rotation(), s.entryConnectorWorldPos(),
                             candidate.constructionCost, town));
                         if (s.bb() != null) town.addUnderConstruction(candidate.id, s.pos(), s.bb(), s.rotation());
-                        int mySlot = town.getBuilderSlot(npc.getUUID());
+                        int mySlot = town.getNpcSlot("builder", npc.getUUID());
                         if (mySlot >= 0) {
                             town.setActiveBuild(mySlot, new ActiveBuildState(
                                 candidate.id, s.pos(), s.rotation(), correctedChosen.pos(), correctedChosen.direction(),
@@ -505,7 +543,7 @@ public class SimpleStateMachine {
                 }
             }
         }
-        if (candidateDefs.isEmpty()) return;
+        if (candidateDefs.isEmpty()) { maybeWander(); return; }
 
         int idx = npc.getRandom().nextInt(candidateDefs.size());
         ActivityDef def = candidateDefs.get(idx);
@@ -530,7 +568,7 @@ public class SimpleStateMachine {
 
     private void tickActivity() {
         if (!(npc.level() instanceof ServerLevel serverLevel)) return;
-        Town town = findTown(serverLevel);
+        Town town = findTown(serverLevel, npc);
 
         if (town == null) {
             cancelActivity();
@@ -678,6 +716,108 @@ public class SimpleStateMachine {
         activityPerformTicks = 0;
     }
 
+    private void maybeWander() {
+        if (!npc.getNavigation().isDone()) return;
+        Vec3 target = DefaultRandomPos.getPos(npc, 10, 7);
+        if (target != null) npc.getNavigation().moveTo(target.x, target.y, target.z, 0.4);
+    }
+
+    // Returns true when the current daytime falls inside the configured sleep window.
+    // Handles midnight wrap-around: e.g., bedtime=13000 wakeup=1000 spans past midnight.
+    private boolean isSleepTime(long dayTime, BuilderConfigDataHandler.Config cfg) {
+        int sleep = cfg.bedtime;
+        int wake  = cfg.wakeupTime;
+        if (sleep > wake) {
+            return dayTime >= sleep || dayTime < wake;
+        } else {
+            return dayTime >= sleep && dayTime < wake;
+        }
+    }
+
+    // Interrupts whatever the builder was doing and switches to SLEEPING.
+    // ACTIVITY: cancelActivity() cleans up hands, navigation, and currentActivity.
+    // BUILD: activeBuild is nulled here; Town.ActiveBuildState persists the resume point and
+    //        tickIdle() will reconstruct the BuildGoal on the next morning cycle.
+    private void enterSleep() {
+        if (current == State.ACTIVITY) cancelActivity();
+        npc.getNavigation().stop();
+        npc.freeHands();
+        activeBuild      = null;
+        activeQueueEntry = null;
+        sleepBedPos      = null;
+        sleepGoTo        = null;
+        current          = State.SLEEPING;
+    }
+
+    // Drives the full sleep lifecycle: walk to bed -> lie down -> wake up.
+    // Internal progression is tracked by sleepBedPos and sleepGoTo fields, not sub-states.
+    private void tickSleeping() {
+        if (!(npc.level() instanceof ServerLevel level)) return;
+        BuilderConfigDataHandler.Config cfg = BuilderConfigDataHandler.get();
+        long dayTime = level.getDayTime() % 24000;
+
+        // Wake up when the sleep window ends.
+        if (!isSleepTime(dayTime, cfg)) {
+            if (npc.isSleeping()) npc.stopSleeping();
+            sleepBedPos = null;
+            sleepGoTo   = null;
+            current     = State.IDLE;
+            return;
+        }
+
+        // Already lying in bed -- wait for the wake condition above.
+        if (npc.isSleeping()) return;
+
+        // Locate the rest bed on first entry (or after a server restart where sleepBedPos was lost).
+        if (sleepBedPos == null) {
+            Town town = findTown(level, npc);
+            if (town == null) return;
+            sleepBedPos = findRestBed(level, town, cfg);
+            if (sleepBedPos == null) return;
+        }
+
+        // Navigate to the bed.
+        if (sleepGoTo == null) {
+            sleepGoTo = new GoToPosition(npc, sleepBedPos, cfg.walkSpeed, 2.0);
+        }
+
+        // Arrived: lie down.
+        if (sleepGoTo.tick()) {
+            sleepGoTo = null;
+            npc.startSleeping(sleepBedPos);
+        }
+    }
+
+    // Finds the first BedBlock HEAD in any building listed in cfg.restBuildings.
+    // Returns null if no suitable bed is found.
+    private BlockPos findRestBed(ServerLevel level, Town town, BuilderConfigDataHandler.Config cfg) {
+        for (PlacedBuilding building : town.getBuildings()) {
+            if (!cfg.restBuildings.contains(building.defId)) continue;
+            if (building.bb == null) continue;
+            BlockPos bed = scanBedInBox(level, building.bb);
+            if (bed != null) return bed;
+        }
+        return null;
+    }
+
+    // Scans a bounding box for a BedBlock in its HEAD part position.
+    // HEAD is used because startSleepInBed requires the head position.
+    private static BlockPos scanBedInBox(ServerLevel level, BoundingBox bb) {
+        for (int x = bb.minX(); x <= bb.maxX(); x++) {
+            for (int y = bb.minY(); y <= bb.maxY(); y++) {
+                for (int z = bb.minZ(); z <= bb.maxZ(); z++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    BlockState state = level.getBlockState(pos);
+                    if (state.getBlock() instanceof BedBlock
+                            && state.getValue(BedBlock.PART) == BedPart.HEAD) {
+                        return pos;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     private <T> void shuffleInPlace(List<T> list) {
         for (int i = list.size() - 1; i > 0; i--) {
             int j = npc.getRandom().nextInt(i + 1);
@@ -692,10 +832,10 @@ public class SimpleStateMachine {
         if (activeBuild.tick()) {
             BlockPos completedPos = activeBuild.getFinalPlacementPos();
             if (npc.level() instanceof ServerLevel sl) {
-                Town qTown = findTown(sl);
+                Town qTown = findTown(sl, npc);
                 // Clear the persisted build state regardless of success or failure.
                 if (qTown != null) {
-                    int mySlot = qTown.getBuilderSlot(npc.getUUID());
+                    int mySlot = qTown.getNpcSlot("builder", npc.getUUID());
                     if (mySlot >= 0) qTown.clearActiveBuild(mySlot);
                 }
                 if (!activeBuild.isFailed() && activeQueueEntry != null && qTown != null) {
@@ -720,7 +860,7 @@ public class SimpleStateMachine {
             }
             // Remove construction/upgrade markers and fire targeted packets.
             if (npc.level() instanceof ServerLevel sl) {
-                Town doneTown = findTown(sl);
+                Town doneTown = findTown(sl, npc);
                 if (doneTown != null) {
                     doneTown.removeUnderConstruction(completedPos);
                     doneTown.removeUnderUpgrade(completedPos);
@@ -743,37 +883,4 @@ public class SimpleStateMachine {
         }
     }
 
-    private static ConnectionPoint correctConnectionPointY(ServerLevel level, ConnectionPoint point) {
-        if (!level.isLoaded(point.pos())) return point;
-        int wx = point.pos().getX(), wz = point.pos().getZ();
-        int scanStart = level.getHeight(Heightmap.Types.WORLD_SURFACE, wx, wz) - 1;
-        if (scanStart < 0) return point;
-        for (int y = scanStart; y >= level.getMinBuildHeight(); y--) {
-            BlockState bs = level.getBlockState(new BlockPos(wx, y, wz));
-            // Stop on the first solid, non-vegetation block. Jigsaw is explicitly included
-            // as a stop target: vanilla roads leave jigsaw in the world at road surface level,
-            // and skipping it (like SCAN_IGNORE_BLOCKS does) would give Y - 1.
-            if (!bs.isAir() && (!BuildSchematic.SCAN_IGNORE_BLOCKS.contains(bs.getBlock()) || bs.is(Blocks.JIGSAW))) {
-                if (y == point.pos().getY()) return point;
-                return new ConnectionPoint(
-                    new BlockPos(wx, y, wz),
-                    point.direction(), point.targetName(), point.insertionOrder()
-                );
-            }
-        }
-        return point;
-    }
-
-    private Town findTown(ServerLevel level) {
-        net.minecraft.core.BlockPos anchor = npc.getTownAnchorPos();
-        if (anchor != null) {
-            return LevelTowns.get(level).getTownAt(anchor)
-                .filter(t -> t.getBuilderNpcIds().contains(npc.getUUID()))
-                .orElse(null);
-        }
-        // Fallback for builders loaded from saves predating anchor tracking.
-        return LevelTowns.get(level).getAllTowns().stream()
-            .filter(t -> t.getBuilderNpcIds().contains(npc.getUUID()))
-            .findFirst().orElse(null);
-    }
 }

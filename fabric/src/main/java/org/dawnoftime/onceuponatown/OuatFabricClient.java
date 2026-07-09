@@ -17,6 +17,7 @@ import org.dawnoftime.onceuponatown.client.model.NpcModel;
 import org.dawnoftime.onceuponatown.client.renderer.NpcRenderer;
 import org.dawnoftime.onceuponatown.client.screen.TownHubScreen;
 import org.dawnoftime.onceuponatown.network.C2SAdvanceEraPacket;
+import org.dawnoftime.onceuponatown.network.C2SSelectEraPathPacket;
 import org.dawnoftime.onceuponatown.network.C2SBuyPacket;
 import org.dawnoftime.onceuponatown.network.C2SDepositPacket;
 import org.dawnoftime.onceuponatown.network.C2SContributeQuestPacket;
@@ -110,6 +111,11 @@ public class OuatFabricClient implements ClientModInitializer {
             var buf = PacketByteBufs.create();
             new C2SAdvanceEraPacket(pos, pathId).encode(buf);
             ClientPlayNetworking.send(C2SAdvanceEraPacket.ID, buf);
+        };
+        NetworkHelper.sendSelectEraPathPacket = (pos, pathId) -> {
+            var buf = PacketByteBufs.create();
+            new C2SSelectEraPathPacket(pos, pathId).encode(buf);
+            ClientPlayNetworking.send(C2SSelectEraPathPacket.ID, buf);
         };
         NetworkHelper.sendDepositPacket = pos -> {
             var buf = PacketByteBufs.create();

@@ -4,10 +4,11 @@
   "entry_pool": "onceuponatown:jobs",
   "icon_item": "minecraft:wooden_axe",
   "category": "jobs",
-  "weight": 3,
+  "weight": 2,
 
+  "spawns_npc": "lumberjack",
   "required_buildings": [
-    { "defId": "grove", "count": 2 },
+    { "defId": "grove", "count": 1 },
     { "defId": "workshop", "count": 1 }
 
   ],
@@ -49,60 +50,6 @@
       "amount": 1,
       "every_ticks": 1800,
       "capacity_stacks": 1
-    },
-    {
-      "item": "minecraft:oak_wood",
-      "amount": 1,
-      "every_ticks": 2000,
-      "capacity_stacks": 1,
-      "unlock_at_level": 1
-    },
-    {
-      "item": "minecraft:stripped_oak_log",
-      "amount": 1,
-      "every_ticks": 2000,
-      "capacity_stacks": 1,
-      "unlock_at_level": 1
-    },
-    {
-      "item": "minecraft:stripped_oak_wood",
-      "amount": 1,
-      "every_ticks": 2000,
-      "capacity_stacks": 1,
-      "unlock_at_level": 1
     }
-  ],
-  "upgrades": [
-    {
-      "cadence_multiplier": 0.10,
-      "unlocks_display": ["minecraft:oak_wood","minecraft:stripped_oak_log", "minecraft:stripped_oak_wood"],
-      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 20 }]
-    },
-    {
-      "capacity_stacks_add": 1,
-      "amount_add": 1,
-      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 30 }]
-    },
-    {
-      "cadence_multiplier": 0.10,
-      "capacity_stacks_add": 1,
-      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 40 }]
-    },
-    {
-      "cadence_multiplier": 0.20,
-      "amount_add": 1,
-      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 60 }]
-    },
-    {
-      "capacity_stacks_add": 1,
-      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 80 }]
-    },
-    {
-      "cadence_multiplier": 0.20,
-      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 100 }]
-    }
-  ],
-  "nbt_levels": [
-    "onceuponatown:plains/jobs/lumberjack_lvl1"
   ]
 }

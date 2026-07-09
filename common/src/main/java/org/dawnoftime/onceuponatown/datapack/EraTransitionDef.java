@@ -4,6 +4,7 @@ import org.dawnoftime.onceuponatown.town.BuildingDef;
 import org.dawnoftime.onceuponatown.town.ItemCost;
 
 import java.util.List;
+import java.util.Map;
 
 public class EraTransitionDef {
     public final String id;
@@ -24,17 +25,20 @@ public class EraTransitionDef {
     public final int weightCapIncrease;
     // Structure type label after this transition completes (e.g. "Settlement", "Village", "Castle")
     public final String structureLabel;
-    // If true, completing this transition increments Town.targetBuilderCount by 1
-    public final boolean unlockNewBuilder;
+    // Per-job NPC counts to unlock when this transition completes (e.g. {"builder": 1}).
+    public final Map<String, Integer> unlockNpcCounts;
     // Building defIds to auto-upgrade (free) when this transition completes. Default: empty list.
     public final List<String> autoUpgradeIds;
+    // Ordered list of building defIds the autonomy system will queue to meet this transition's requirements.
+    public final List<String> autoBuildSequence;
 
     public EraTransitionDef(String id, int fromEra, String fromOrientation, String orientationLabel,
                             String iconItem, List<ItemCost> resourceCost,
                             int requiredResidents, List<BuildingDef.BuildingRequirement> requiredBuildings,
                             List<String> unlockedBuildingIds, String nextOrientation,
                             int weightCapIncrease, String structureLabel,
-                            boolean unlockNewBuilder, List<String> autoUpgradeIds) {
+                            Map<String, Integer> unlockNpcCounts, List<String> autoUpgradeIds,
+                            List<String> autoBuildSequence) {
         this.id = id;
         this.fromEra = fromEra;
         this.fromOrientation = fromOrientation;
@@ -47,7 +51,8 @@ public class EraTransitionDef {
         this.nextOrientation = nextOrientation;
         this.weightCapIncrease = weightCapIncrease;
         this.structureLabel = structureLabel;
-        this.unlockNewBuilder = unlockNewBuilder;
+        this.unlockNpcCounts = unlockNpcCounts;
         this.autoUpgradeIds = autoUpgradeIds;
+        this.autoBuildSequence = autoBuildSequence;
     }
 }

@@ -11,19 +11,22 @@ public sealed interface QueueEntry permits QueueEntry.NewBuild, QueueEntry.Upgra
 
     long entryId();
     String defId();
+    // True for entries injected by the autonomy system; player cannot remove them.
+    boolean locked();
 
     /** A new building to construct from a connection point. */
-    record NewBuild(long entryId, String defId) implements QueueEntry {}
+    record NewBuild(long entryId, String defId, boolean locked) implements QueueEntry {}
 
     /**
      * An upgrade task for a building already placed in the world.
      * fromLevel is the building's upgrade level when this task was enqueued.
      */
-    record Upgrade(long entryId, String defId, BlockPos buildingWorldPos, int fromLevel) implements QueueEntry {}
+    record Upgrade(long entryId, String defId, BlockPos buildingWorldPos, int fromLevel, boolean locked) implements QueueEntry {}
 
     static CompoundTag serialize(QueueEntry entry) {
         CompoundTag tag = new CompoundTag();
         tag.putLong("EntryId", entry.entryId());
+        tag.putBoolean("Locked", entry.locked());
         if (entry instanceof Upgrade u) {
             tag.putString("Type", "upgrade");
             tag.putString("DefId", u.defId());
@@ -39,9 +42,10 @@ public sealed interface QueueEntry permits QueueEntry.NewBuild, QueueEntry.Upgra
     static QueueEntry deserialize(CompoundTag tag) {
         long entryId = tag.contains("EntryId") ? tag.getLong("EntryId") : 0L;
         String defId = tag.getString("DefId");
+        boolean locked = tag.contains("Locked") && tag.getBoolean("Locked");
         if ("upgrade".equals(tag.getString("Type"))) {
-            return new Upgrade(entryId, defId, BlockPos.of(tag.getLong("BuildingWorldPos")), tag.getInt("FromLevel"));
+            return new Upgrade(entryId, defId, BlockPos.of(tag.getLong("BuildingWorldPos")), tag.getInt("FromLevel"), locked);
         }
-        return new NewBuild(entryId, defId);
+        return new NewBuild(entryId, defId, locked);
     }
 }

@@ -34,6 +34,7 @@ public class NetworkHelper {
     public static BiConsumer<BlockPos, Integer> sendRemoveQueuedBuildingPacket = (pos, index)     -> {};
     public static BiConsumer<BlockPos, Long>    sendUpgradeBuildingPacket      = (pos, worldPos)  -> {};
     public static BiConsumer<BlockPos, String>  sendAdvanceEraPacket           = (pos, pathId)    -> {};
+    public static BiConsumer<BlockPos, String>  sendSelectEraPathPacket        = (pos, pathId)    -> {};
     public static Consumer<BlockPos>            sendDepositPacket              = pos              -> {};
     public static BiConsumer<BlockPos, String>  sendContributeQuestPacket      = (pos, questId)   -> {};
     public static BiConsumer<BlockPos, String>  sendVerifyClearancePacket      = (pos, questId)   -> {};

@@ -7,9 +7,8 @@
   "weight": 3,
 
   "required_buildings": [
-    { "defId": "wild_crops", "count": 2 },
-    { "defId": "cow_field", "count": 1 },
-    { "defId": "sheep_field", "count": 1 }
+    { "defId": "wild_crops", "count": 1 },
+    { "defId": "oven", "count": 1 }
   ],
   "construction_cost": [
     {

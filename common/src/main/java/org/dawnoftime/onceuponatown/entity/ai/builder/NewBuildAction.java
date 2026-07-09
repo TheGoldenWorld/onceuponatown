@@ -1,14 +1,15 @@
-package org.dawnoftime.onceuponatown.entity.ai;
+package org.dawnoftime.onceuponatown.entity.ai.builder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Rotation;
-import java.util.UUID;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import org.dawnoftime.onceuponatown.building.schematic.BlockStep;
 import org.dawnoftime.onceuponatown.building.schematic.BuildSchematic;
+import org.dawnoftime.onceuponatown.building.schematic.EntityStep;
+import org.dawnoftime.onceuponatown.building.schematic.PlacementStep;
 import org.dawnoftime.onceuponatown.building.schematic.SchematicBlock;
 import org.dawnoftime.onceuponatown.building.schematic.SchematicEntity;
 import org.dawnoftime.onceuponatown.building.schematic.SchematicReader;
@@ -18,17 +19,19 @@ import org.dawnoftime.onceuponatown.entity.Npc;
 import org.dawnoftime.onceuponatown.town.BuildingDef;
 import org.dawnoftime.onceuponatown.town.ConnectionPoint;
 import org.dawnoftime.onceuponatown.town.ItemCost;
+import org.dawnoftime.onceuponatown.town.LevelTowns;
 import org.dawnoftime.onceuponatown.town.Town;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
 // Handles new building construction: terrain prep, full NBT block list, resource deduction,
 // town registration, and entity spawning on completion.
-public class NewBuildAction implements BuildAction {
+public class NewBuildAction implements BuilderAction {
     private static final Logger LOGGER = LoggerFactory.getLogger(NewBuildAction.class);
 
     final BuildingDef def;
@@ -42,8 +45,6 @@ public class NewBuildAction implements BuildAction {
     // Set true for server-restart resumes to skip terrain re-carving and the reading animation.
     boolean skipTerrainPrep = false;
     boolean skipInitialReading = false;
-    // Stored during prepareBlocks; needed for entity spawning in onComplete.
-    private StructureTemplate cachedTemplate = null;
     // Populated by executeInstant for terrain-matched placements; forwarded to PlacedBuilding.
     private List<BlockPos> obstaclePositions = List.of();
 
@@ -86,63 +87,93 @@ public class NewBuildAction implements BuildAction {
     }
 
     @Override
-    public List<SchematicBlock> prepareBlocks(ServerLevel level, Npc npc) {
+    public List<PlacementStep> prepareSteps(ServerLevel level, Npc npc) {
         Optional<StructureTemplate> templateOpt = level.getStructureManager().get(def.nbt);
         if (templateOpt.isEmpty()) {
             LOGGER.error("[OUAT-BUILD] NBT template not found -- building='{}' nbt='{}'", def.id, def.nbt);
             failed = true;
             return List.of();
         }
-        cachedTemplate = templateOpt.get();
+        StructureTemplate template = templateOpt.get();
 
         if (def.terrainMatching) {
             if (skipTerrainPrep) {
                 // Resume: recompute Y-adjusted positions and filter blocks already placed.
                 List<SchematicBlock> full = BuildSchematic.prepareTerrainMatchedBlocks(
                     level, finalPlacementPos, def.nbt, rotation, def.obstacleBlocks, null);
-                return full.stream()
+                List<SchematicBlock> remaining = full.stream()
                     .filter(b -> !level.getBlockState(finalPlacementPos.offset(b.localPos())).equals(b.state()))
                     .toList();
+                return buildStepList(remaining, template);
             }
             List<BlockPos> collected = new ArrayList<>();
             List<SchematicBlock> result = BuildSchematic.prepareTerrainMatchedBlocks(
                 level, finalPlacementPos, def.nbt, rotation, def.obstacleBlocks, collected);
             obstaclePositions = collected;
-            return result;
+            return buildStepList(result, template);
         }
 
         if (skipTerrainPrep) {
             // Resume: skip terrain carving and return only blocks not yet in the world.
-            return BuildSchematic.computeRemainingBlocks(level, finalPlacementPos, def.nbt, rotation);
+            return buildStepList(BuildSchematic.computeRemainingBlocks(level, finalPlacementPos, def.nbt, rotation), template);
         }
 
-        TerrainCarver.prePlace(level, finalPlacementPos, cachedTemplate, rotation);
-        TerrainCarver.postPlace(level, finalPlacementPos, cachedTemplate, rotation);
+        TerrainCarver.prePlace(level, finalPlacementPos, template, rotation);
+        TerrainCarver.postPlace(level, finalPlacementPos, template, rotation);
 
-        return SchematicReader.readSortedBlocks(cachedTemplate, rotation);
+        return buildStepList(SchematicReader.readSortedBlocks(template, rotation), template);
+    }
+
+    // Converts a raw SchematicBlock list into the unified ordered PlacementStep list:
+    //   1. Normal BlockSteps (Y-sorted snake, order preserved from SchematicReader)
+    //   2. Deferred BlockSteps (controlled by DEFERRED_PLACEMENT_PRIORITY: water first, lily pads after)
+    //   3. EntitySteps (last, placed one-by-one by the NPC after all blocks are done)
+    private List<PlacementStep> buildStepList(List<SchematicBlock> rawBlocks, StructureTemplate template) {
+        List<BlockStep> normal = new ArrayList<>(rawBlocks.size());
+        List<BlockStep> deferred = new ArrayList<>();
+
+        for (SchematicBlock b : rawBlocks) {
+            BlockStep step = new BlockStep(finalPlacementPos.offset(b.localPos()), b.state(), b.nbt());
+            if (BuildSchematic.DEFERRED_PLACEMENT_PRIORITY.containsKey(b.state().getBlock())) {
+                deferred.add(step);
+            } else {
+                normal.add(step);
+            }
+        }
+        deferred.sort(Comparator.comparingInt(b -> BuildSchematic.DEFERRED_PLACEMENT_PRIORITY.get(b.state().getBlock())));
+
+        List<SchematicEntity> entities = SchematicReader.readEntities(template, rotation, finalPlacementPos);
+
+        List<PlacementStep> result = new ArrayList<>(normal.size() + deferred.size() + entities.size());
+        result.addAll(normal);
+        result.addAll(deferred);
+        for (SchematicEntity se : entities) {
+            result.add(new EntityStep(se.worldPos(), se.nbt()));
+        }
+        return result;
     }
 
     @Override
     public void onComplete(ServerLevel level, Npc npc) {
         town.getTownInventory().removeStock(constructionCost);
         BuildSchematic.replaceJigsawInWorld(level, usedConnection.pos());
-        npc.onBuildComplete(finalPlacementPos, def.id, usedConnection, rotation, entryConnectorWorldPos, obstaclePositions);
 
-        if (cachedTemplate != null) {
-            List<SchematicEntity> entities = SchematicReader.readEntities(cachedTemplate, rotation, finalPlacementPos);
-            for (SchematicEntity se : entities) {
-                EntityType.by(se.nbt()).ifPresent(type -> {
-                    Entity entity = type.create(level);
-                    if (entity != null) {
-                        entity.load(se.nbt());
-                        entity.setUUID(UUID.randomUUID());
-                        entity.moveTo(se.worldPos().x, se.worldPos().y, se.worldPos().z,
-                                      entity.getYRot(), entity.getXRot());
-                        level.addFreshEntity(entity);
-                    }
-                });
-            }
+        List<ConnectionPoint> connections = BuildSchematic.readJigsawPoints(
+            level, finalPlacementPos, def.id, rotation, entryConnectorWorldPos, def.terrainMatching);
+        BoundingBox bb = def.terrainMatching
+            ? BuildSchematic.computeFootprintBoundingBox(level, finalPlacementPos, def.nbt, rotation)
+                .orElseGet(() -> new BoundingBox(
+                    finalPlacementPos.getX(), finalPlacementPos.getY(), finalPlacementPos.getZ(),
+                    finalPlacementPos.getX(), finalPlacementPos.getY(), finalPlacementPos.getZ()))
+            : BuildSchematic.computeBoundingBox(level, finalPlacementPos, def.nbt, rotation)
+                .orElseGet(() -> new BoundingBox(
+                    finalPlacementPos.getX(), finalPlacementPos.getY(), finalPlacementPos.getZ(),
+                    finalPlacementPos.getX(), finalPlacementPos.getY(), finalPlacementPos.getZ()));
+        town.registerBuilding(finalPlacementPos, def.id, connections, bb, rotation, obstaclePositions);
+        if (def.spawnsNpcJob != null) {
+            town.incrementTargetNpcCount(def.spawnsNpcJob);
         }
+        LevelTowns.get(level).markDirty();
 
         npc.freeHands();
     }

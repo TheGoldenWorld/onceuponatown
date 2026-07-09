@@ -18,5 +18,7 @@
   ],
   "auto_upgrade_ids": ["settlement"],
 
+  "auto_build_sequence": ["house"],
+
   "next_orientation": "forge"
 }

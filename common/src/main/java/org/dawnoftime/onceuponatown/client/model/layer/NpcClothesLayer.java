@@ -10,9 +10,13 @@ import org.dawnoftime.onceuponatown.client.model.NpcModel;
 import org.dawnoftime.onceuponatown.client.renderer.NpcRenderer;
 import org.dawnoftime.onceuponatown.entity.Npc;
 
+import java.util.Map;
+
 public class NpcClothesLayer<T extends Npc, M extends NpcModel<T>> extends RenderLayer<T, M> {
-    // v1: single static builder outfit texture
-    private static final ResourceLocation BUILDER_CLOTHES = new ResourceLocation(Ouat.MOD_ID, "textures/entity/npc/builder_clothes.png");
+    private static final Map<String, ResourceLocation> CLOTHES_BY_JOB = Map.of(
+        "builder",    new ResourceLocation(Ouat.MOD_ID, "textures/entity/npc/builder_clothes.png"),
+        "lumberjack", new ResourceLocation(Ouat.MOD_ID, "textures/entity/npc/lumberjack_clothes.png")
+    );
 
     @SuppressWarnings("unchecked")
     public NpcClothesLayer(NpcRenderer renderer) {
@@ -23,8 +27,9 @@ public class NpcClothesLayer<T extends Npc, M extends NpcModel<T>> extends Rende
     public void render(PoseStack poseStack, MultiBufferSource buffer, int packedLight, T npc,
                         float limbSwing, float limbSwingAmount, float partialTick,
                         float ageInTicks, float netHeadYaw, float headPitch) {
-        if (!npc.isInvisible()) {
-            renderColoredCutoutModel(getParentModel(), BUILDER_CLOTHES, poseStack, buffer, packedLight, npc, 1.0F, 1.0F, 1.0F);
-        }
+        if (npc.isInvisible()) return;
+        ResourceLocation texture = CLOTHES_BY_JOB.get(npc.getJobId());
+        if (texture == null) return;
+        renderColoredCutoutModel(getParentModel(), texture, poseStack, buffer, packedLight, npc, 1.0F, 1.0F, 1.0F);
     }
 }

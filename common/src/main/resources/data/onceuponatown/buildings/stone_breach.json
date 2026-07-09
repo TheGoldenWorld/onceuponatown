@@ -9,7 +9,7 @@
   "construction_cost": [
     {
       "item": "minecraft:cobblestone",
-      "amount": 5
+      "amount": 15
     }
   ],
   "production": [
@@ -17,7 +17,7 @@
       "item": "minecraft:cobblestone",
       "amount": 2,
       "every_ticks": 1800,
-      "capacity_stacks": 2
+      "capacity_stacks": 1
     }
   ]
 }

@@ -58,6 +58,7 @@ public class EraProgressDraggableWidget extends DraggableWidget {
     private List<EraPathOption> pathOptions = new ArrayList<>();
     private String selectedPathId = null;
     private final Consumer<String> onAdvance;
+    private final Consumer<String> onSelectPath;
 
     private int contentHeight = 0;
     private final List<CardBounds> cardBounds = new ArrayList<>();
@@ -68,10 +69,11 @@ public class EraProgressDraggableWidget extends DraggableWidget {
 
     public EraProgressDraggableWidget(int x, int y, int freeZoneMaxX, int screenH,
                                        int currentEra, List<EraPathOption> pathOptions,
-                                       Consumer<String> onAdvance) {
+                                       Consumer<String> onAdvance, Consumer<String> onSelectPath) {
         super(x, y, computeWidgetW(pathOptions), TITLE_BAR_H + computeContentH(pathOptions), freeZoneMaxX, screenH);
         this.pathOptions = new ArrayList<>(pathOptions);
         this.onAdvance = onAdvance;
+        this.onSelectPath = onSelectPath;
         this.contentHeight = computeContentH(pathOptions);
         this.selectedPathId = ClientSessionState.selectedEraPathId;
     }
@@ -84,6 +86,16 @@ public class EraProgressDraggableWidget extends DraggableWidget {
         if (selectedPathId != null && pathOptions.stream().noneMatch(p -> p.id().equals(selectedPathId))) {
             selectedPathId = null;
         }
+    }
+
+    // Called when the server notifies a pre-selected path (autonomy random pick).
+    // Only applies if the player has not manually selected a path yet this session.
+    public void applyServerPreselection(String autonomyChosenId) {
+        if (autonomyChosenId == null || autonomyChosenId.isEmpty()) return;
+        if (ClientSessionState.selectedEraPathId != null) return;
+        if (pathOptions.stream().noneMatch(p -> p.id().equals(autonomyChosenId))) return;
+        selectedPathId = autonomyChosenId;
+        ClientSessionState.selectedEraPathId = selectedPathId;
     }
 
     public void updateResidents(int activeResidents) {
@@ -341,6 +353,7 @@ public class EraProgressDraggableWidget extends DraggableWidget {
                     if (cardIdx < pathOptions.size()) {
                         selectedPathId = pathOptions.get(cardIdx).id();
                         ClientSessionState.selectedEraPathId = selectedPathId;
+                        if (onSelectPath != null) onSelectPath.accept(selectedPathId);
                     }
                     return true;
                 }

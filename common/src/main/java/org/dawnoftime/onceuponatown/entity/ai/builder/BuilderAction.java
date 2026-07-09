@@ -1,17 +1,17 @@
-package org.dawnoftime.onceuponatown.entity.ai;
+package org.dawnoftime.onceuponatown.entity.ai.builder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import org.dawnoftime.onceuponatown.building.schematic.SchematicBlock;
+import org.dawnoftime.onceuponatown.building.schematic.PlacementStep;
 import org.dawnoftime.onceuponatown.entity.Npc;
 
 import java.util.List;
 
-public interface BuildAction {
+public interface BuilderAction {
     // World position the NPC walks toward during the MOVING phase.
     BlockPos getTargetPos();
-    // World-space origin: add localPos from SchematicBlock to get world coordinates.
+    // World-space origin used for bounding-box and connection-point registration.
     BlockPos getOrigin();
 
     // True for terrain-matched (road/pond) buildings placed in a single instant call.
@@ -19,15 +19,17 @@ public interface BuildAction {
     // For instant actions: performs the full placement. Returns true on success.
     boolean executeInstant(ServerLevel level, Npc npc);
 
-    // For block-by-block actions: returns the ordered block list to place.
+    // Returns the ordered placement sequence: normal blocks, then deferred blocks (water, lily pads),
+    // then entities. BuildGoal iterates this list one step per tick with full NPC animation.
     // Called once on the first BUILDING tick.
-    List<SchematicBlock> prepareBlocks(ServerLevel level, Npc npc);
+    List<PlacementStep> prepareSteps(ServerLevel level, Npc npc);
 
     // Called when the NPC arrives at the target (MOVING -> BUILDING transition).
     // Use to start pre-build animations (e.g. reading the plan).
     default void onArrived(Npc npc) {}
 
-    // Called after all blocks are placed (or after executeInstant for instant builds).
+    // Called after all steps are executed (or after executeInstant for instant builds).
+    // Must handle only town state: stock, jigsaw, registration, markDirty. No world mutation.
     void onComplete(ServerLevel level, Npc npc);
 
     boolean isFailed();

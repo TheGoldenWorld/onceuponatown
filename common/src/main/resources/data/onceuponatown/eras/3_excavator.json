@@ -15,8 +15,10 @@
   "required_residents": 5,
   "required_buildings": [
     { "defId": "open_mine", "count": 1 }
-
   ],
+
+  "auto_build_sequence": ["open_mine", "house"],
+
   "auto_upgrade_ids": ["settlement"],
 
   "next_orientation": "excavator"

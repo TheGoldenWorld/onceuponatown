@@ -21,11 +21,9 @@ import java.util.List;
 public class NpcModel<T extends Npc> extends HumanoidModel<T> {
     public static final ModelLayerLocation LAYER_LOCATION = new ModelLayerLocation(new ResourceLocation(Ouat.MOD_ID, "npc"), "main_layer");
     private final List<ModelPart> parts;
-    private final ModelPart crossedArms;
 
     public NpcModel(ModelPart root) {
         super(root);
-        this.crossedArms = this.body.getChild("crossed_arms");
         this.parts = root.getAllParts().filter((part) -> !part.isEmpty()).collect(ImmutableList.toImmutableList());
     }
 
@@ -38,10 +36,9 @@ public class NpcModel<T extends Npc> extends HumanoidModel<T> {
         // Head
         PartDefinition head = root.addOrReplaceChild("head", CubeListBuilder.create().texOffs(0, 0).addBox(-4.0F, -10.0F, -4.0F, 8.0F, 10.0F, 8.0F), PartPose.ZERO);
         head.addOrReplaceChild("nose", CubeListBuilder.create().texOffs(24, 0).addBox(-1.0F, -1.0F, -6.0F, 2.0F, 4.0F, 2.0F), PartPose.offset(0.0F, -2.0F, 0.0F));
-        // Body and crossed arms
+        // Body
         PartDefinition body = root.addOrReplaceChild("body", CubeListBuilder.create().texOffs(16, 20).addBox(-4.0F, 0.0F, -3.0F, 8.0F, 12.0F, 6.0F), PartPose.ZERO);
         body.addOrReplaceChild("jacket", CubeListBuilder.create().texOffs(0, 38).addBox(-4.0F, 0.0F, -3.0F, 8.0F, 20.0F, 6.0F, new CubeDeformation(0.5F)), PartPose.ZERO);
-        body.addOrReplaceChild("crossed_arms", CubeListBuilder.create().texOffs(40, 38).addBox(-4.0F, 2.0F, -2.0F, 8.0F, 4.0F, 4.0F, new CubeDeformation(0.0F)).texOffs(44, 22).addBox(-8.0F, -2.0F, -2.0F, 4.0F, 8.0F, 4.0F, new CubeDeformation(0.0F)).texOffs(44, 22).mirror().addBox(4.0F, -2.0F, -2.0F, 4.0F, 8.0F, 4.0F, new CubeDeformation(0.0F)).mirror(false), PartPose.offsetAndRotation(0.0F, 3.0F, -1.0F, -0.75F, 0.0F, 0.0F));
         // Arms -- pivot at shoulder position matching vanilla HumanoidModel convention.
         // (0,0,0) placed the pivot at the model center, hiding the arm inside the body mesh
         // and making all rotation animations invisible. Correct positions: (-5,2,0) / (5,2,0).
@@ -66,12 +63,30 @@ public class NpcModel<T extends Npc> extends HumanoidModel<T> {
             this.rightArmPose = rightArmPose;
             this.leftArmPose = leftArmPose;
         }
-        setCrossedArms(npc.isCrossingArms());
         super.prepareMobModel(npc, limbSwing, limbSwingAmount, partialTick);
     }
 
     @Override
     public void setupAnim(T npc, float limbSwing, float limbSwingAmount, float ageInTicks, float netHeadYaw, float headPitch) {
+        // Sleeping pose: freeze limbs in a neutral rest position and skip all other animations.
+        // The renderer's setupRotations() handles the horizontal rotation on top of this.
+        if (npc.isSleeping()) {
+            this.head.xRot      = 0.1F;
+            this.head.yRot      = 0.0F;
+            this.head.zRot      = 0.0F;
+            this.hat.xRot       = this.head.xRot;
+            this.body.xRot      = 0.0F;
+            this.rightArm.xRot  = -0.4F;
+            this.rightArm.yRot  = 0.0F;
+            this.rightArm.zRot  = 0.05F;
+            this.leftArm.xRot   = -0.4F;
+            this.leftArm.yRot   = 0.0F;
+            this.leftArm.zRot   = -0.05F;
+            this.rightLeg.xRot  = 0.0F;
+            this.leftLeg.xRot   = 0.0F;
+            return;
+        }
+
         super.setupAnim(npc, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
         this.head.zRot = 0.0F;
         this.hat.xRot = this.head.xRot;
@@ -144,11 +159,4 @@ public class NpcModel<T extends Npc> extends HumanoidModel<T> {
         }
         return HumanoidModel.ArmPose.ITEM;
     }
-
-    public void setCrossedArms(boolean crossedArms) {
-        this.crossedArms.visible = crossedArms;
-        this.rightArm.visible = !crossedArms;
-        this.leftArm.visible = !crossedArms;
-    }
-
 }

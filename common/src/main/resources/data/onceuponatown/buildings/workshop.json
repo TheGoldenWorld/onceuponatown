@@ -39,6 +39,15 @@
     },
     {
       "inputs": [
+        { "item": "minecraft:oak_planks", "amount": 3 },
+        { "item": "minecraft:white_wool", "amount": 3 }
+      ],
+      "output": "minecraft:white_bed",
+      "output_amount": 1,
+      "output_capacity_stacks": 1
+    },
+    {
+      "inputs": [
         { "item": "minecraft:oak_planks", "amount": 6 }
       ],
       "output": "minecraft:oak_stairs",
@@ -81,16 +90,6 @@
       "inputs": [{ "item": "minecraft:oak_planks", "amount": 6 }],
       "output": "minecraft:oak_door",
       "output_amount": 3,
-      "output_capacity_stacks": 1
-    },
-    {
-      "inputs": [
-        { "item": "minecraft:oak_log", "amount": 3 },
-        { "item": "minecraft:stick", "amount": 3 },
-        { "item": "minecraft:charcoal", "amount": 1 }
-      ],
-      "output": "minecraft:campfire",
-      "output_amount": 1,
       "output_capacity_stacks": 1
     }
   ]

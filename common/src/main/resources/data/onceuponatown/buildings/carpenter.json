@@ -7,9 +7,8 @@
   "weight": 3,
 
   "required_buildings": [
-    { "defId": "grove", "count": 2 },
-    { "defId": "workshop", "count": 1 },
-    { "defId": "sheep_field", "count": 1 }
+    { "defId": "grove", "count": 3 },
+    { "defId": "workshop", "count": 1 }
 
   ],
   "construction_cost": [
@@ -21,19 +20,11 @@
       "item": "minecraft:cobblestone",
       "amount": 10
     }
+
   ],
   "transform_input_ratio": 0.1,
   "transform_every_ticks": 1600,
   "transformations": [
-    {
-      "inputs": [
-        { "item": "minecraft:oak_planks", "amount": 3 },
-        { "item": "minecraft:white_wool", "amount": 3 }
-      ],
-      "output": "minecraft:white_bed",
-      "output_amount": 1,
-      "output_capacity_stacks": 1
-    },
     {
       "inputs": [
         { "item": "minecraft:oak_planks", "amount": 6 },
