@@ -9,8 +9,8 @@
   "plan_read_min_ticks": 15,
   "plan_read_max_ticks": 35,
 
-  "bedtime": 15000,
-  "wakeup_time": 800,
+  "bedtime": 14000,
+  "wakeup_time": 900,
   "rest_buildings": ["settlement", "settlement_2", "settlement_3"],
 
   "secondary_activities": [

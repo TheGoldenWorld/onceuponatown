@@ -17,7 +17,7 @@
     { "defId": "open_mine", "count": 1 }
   ],
 
-  "auto_build_sequence": ["open_mine", "house"],
+  "auto_build_sequence": [{"defId": "grove", "count": 3}, "open_mine", "carpenter"],
 
   "auto_upgrade_ids": ["settlement"],
 

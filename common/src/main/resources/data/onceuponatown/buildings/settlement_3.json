@@ -63,9 +63,30 @@
       "capacity_stacks_add": 1,
       "unlocks_display": ["minecraft:bread", "minecraft:baked_potato"],
       "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 0 }]
+    },
+    {
+      "capacity_stacks_add": 1,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 20 }]
+    },
+    {
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 40 }]
+    },
+    {
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 60 }]
+    },
+    {
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 80 }]
+    },
+    {
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 100 }]
     }
   ],
   "nbt_levels": [
-    "onceuponatown:plains/starters/settlement_3_lvl1"
+    "onceuponatown:plains/starters/settlement_3_lvl1",
+    "onceuponatown:plains/starters/settlement_3_lvl2",
+    "onceuponatown:plains/starters/settlement_3_lvl3",
+    "onceuponatown:plains/starters/settlement_3_lvl4",
+    "onceuponatown:plains/starters/settlement_3_lvl5",
+    "onceuponatown:plains/starters/settlement_3_lvl6"
   ]
 }

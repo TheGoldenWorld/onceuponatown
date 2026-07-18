@@ -15,7 +15,7 @@
     { "defId": "workshop", "count": 1 }
   ],
 
-  "auto_build_sequence": ["grove", "wild_stone", "wild_crops", "workshop", "wheat_field", "wild_stone", "sheep_field", "house_2"],
+  "auto_build_sequence": ["grove", {"defId": "wild_stone", "count": 2}, "wild_crops", "workshop", "wheat_field", "sheep_field"],
 
   "unlocked_building_ids": ["oven", "stone_breach", "lumberjack", "wild_spot"],
   "auto_upgrade_ids": ["settlement"]

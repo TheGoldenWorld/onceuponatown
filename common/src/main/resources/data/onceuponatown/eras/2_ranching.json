@@ -6,6 +6,7 @@
   "icon_item": "minecraft:saddle",
 
   "weight_cap_increase": 10,
+  "max_upgrade_level": 2,
 
   "resource_cost": [
     { "item": "minecraft:oak_log", "amount": 42 },
@@ -18,7 +19,7 @@
     { "defId": "pig_field", "count": 1 }
   ],
 
-  "auto_build_sequence": ["carrot_field", "lumberjack", "oven", "pig_field", "house_3"],
+  "auto_build_sequence": [{"defId": "grove", "count": 2}, "carrot_field", "oven", "pig_field", "lumberjack"],
 
 
   "unlocked_building_ids": ["lone_place", "carpenter", "cow_field", "pig_farm"],

@@ -72,8 +72,9 @@ public class EraTransitionDataHandler {
         }
         int initialMaxWeight = json.has("initial_max_weight") ? json.get("initial_max_weight").getAsInt() : 20;
         double boostMultiplier = json.has("boost_multiplier") ? json.get("boost_multiplier").getAsDouble() : 1.0;
+        int initialMaxUpgradeLevel = json.has("initial_max_upgrade_level") ? json.get("initial_max_upgrade_level").getAsInt() : 2;
         return new EraDef(era, orientation, orientationLabel, structureLabel, iconItem, starterBuildingId,
-            boostedBuildings, initialMaxWeight, boostMultiplier);
+            boostedBuildings, initialMaxWeight, boostMultiplier, initialMaxUpgradeLevel);
     }
 
     // Derives the transition id from the file path (e.g. "eras/2_rural.json" -> "2_rural").
@@ -122,10 +123,17 @@ public class EraTransitionDataHandler {
             }
         }
 
-        List<String> autoBuildSequence = new ArrayList<>();
+        List<EraTransitionDef.AutoBuildEntry> autoBuildSequence = new ArrayList<>();
         if (json.has("auto_build_sequence")) {
             for (JsonElement el : json.getAsJsonArray("auto_build_sequence")) {
-                autoBuildSequence.add(el.getAsString());
+                if (el.isJsonObject()) {
+                    JsonObject obj = el.getAsJsonObject();
+                    String defId = obj.get("defId").getAsString();
+                    int count = obj.has("count") ? obj.get("count").getAsInt() : 1;
+                    autoBuildSequence.add(new EraTransitionDef.AutoBuildEntry(defId, count));
+                } else {
+                    autoBuildSequence.add(new EraTransitionDef.AutoBuildEntry(el.getAsString(), 1));
+                }
             }
         }
 
@@ -139,10 +147,12 @@ public class EraTransitionDataHandler {
             }
         }
 
+        int maxUpgradeLevel = json.has("max_upgrade_level") ? json.get("max_upgrade_level").getAsInt() : 0;
         return new EraTransitionDef(id, fromEra, fromOrientation, orientationLabel, iconItem,
             resourceCost, requiredResidents, requiredBuildings, Collections.unmodifiableList(unlockedBuildingIds),
             nextOrientation, weightCapIncrease, structureLabel, Collections.unmodifiableMap(unlockNpcCounts),
-            Collections.unmodifiableList(autoUpgradeIds), Collections.unmodifiableList(autoBuildSequence));
+            Collections.unmodifiableList(autoUpgradeIds), Collections.unmodifiableList(autoBuildSequence),
+            maxUpgradeLevel);
     }
 
     public static List<EraTransitionDef> getAvailableTransitions(int fromEra, String currentOrientation) {

@@ -14,8 +14,8 @@
       "amount": 10
     },
     {
-      "item": "minecraft:white_bed",
-      "amount": 1
+      "item": "minecraft:white_wool",
+      "amount": 3
     }
   ],
   "nbt_levels": [

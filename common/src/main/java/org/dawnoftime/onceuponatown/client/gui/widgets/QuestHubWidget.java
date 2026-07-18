@@ -13,6 +13,7 @@ import net.minecraft.world.item.Items;
 import org.dawnoftime.onceuponatown.network.NetworkHelper;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class QuestHubWidget extends DraggableWidget {
@@ -119,6 +120,7 @@ public class QuestHubWidget extends DraggableWidget {
             if ("NOTE".equals(questType)) noteRows.add(row);
             else taskRows.add(row);
         }
+        Collections.reverse(noteRows);
         rebuildRows();
         int maxScroll = Math.max(0, totalH - VISIBLE_H);
         if (scrollPx > maxScroll) scrollPx = maxScroll;

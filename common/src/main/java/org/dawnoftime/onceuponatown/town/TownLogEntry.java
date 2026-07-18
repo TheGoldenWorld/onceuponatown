@@ -8,6 +8,8 @@ public record TownLogEntry(TownLogType type, String param, long gameTick) {
         UPGRADE_START,
         UPGRADE_DONE,
         FOOD_CONSUMED,
-        VILLAGE_FULL
+        VILLAGE_FULL,
+        AUTONOMY_PLANNED,
+        RESIDENT_PLANNED
     }
 }

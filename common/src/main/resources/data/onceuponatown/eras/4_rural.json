@@ -1,0 +1,26 @@
+{
+  "from_era": 3,
+  "from_orientation": "rural",
+  "orientation_label": "Rural",
+  "structure_label": "Village",
+  "icon_item": "minecraft:bread",
+
+  "weight_cap_increase": 10,
+  "max_upgrade_level": 4,
+
+  "resource_cost": [
+    { "item": "minecraft:oak_log", "amount": 75 },
+    { "item": "minecraft:cobblestone", "amount": 64 }
+  ],
+
+  "required_residents": 6,
+  "required_buildings": [
+    { "defId": "granary", "count": 1 }
+  ],
+
+  "auto_build_sequence": ["granary"],
+
+  "auto_upgrade_ids": ["settlement_3"],
+
+  "next_orientation": "rural"
+}

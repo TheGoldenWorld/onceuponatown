@@ -17,7 +17,7 @@
     { "defId": "pig_farm", "count": 1 }
   ],
 
-  "auto_build_sequence": ["pig_field", "cow_field", "pig_field", "pig_farm", "house"],
+  "auto_build_sequence": [{"defId": "grove", "count": 3}, {"defId": "pig_field", "count": 2}, "cow_field", "pig_farm", "carpenter"],
 
   "auto_upgrade_ids": ["settlement_2"],
   "unlocked_building_ids": ["leather_workshop"],

@@ -6,6 +6,7 @@
   "icon_item": "minecraft:wheat_seeds",
 
   "weight_cap_increase": 10,
+  "max_upgrade_level": 2,
 
   "resource_cost": [
     { "item": "minecraft:oak_log", "amount": 42 },
@@ -19,7 +20,7 @@
     { "defId": "potato_field", "count": 1 }
   ],
 
-  "auto_build_sequence": ["wheat_field", "lumberjack", "carrot_field", "oven", "potato_field", "wheat_field", "house_3"],
+  "auto_build_sequence": [{"defId": "grove", "count": 2}, "carrot_field", "oven", "potato_field", "lumberjack"],
 
   "unlocked_building_ids": ["lone_place", "carpenter", "wheat_farm"],
   "unlock_npc_counts": { "builder": 1 },

@@ -17,7 +17,7 @@
     { "defId": "kitchen", "count": 1 }
   ],
 
-  "auto_build_sequence": ["kitchen", "bee_field", "house"],
+  "auto_build_sequence": [{"defId": "grove", "count": 3}, "kitchen", "bee_field", "carpenter"],
 
   "auto_upgrade_ids": ["settlement_2"],
   "unlocked_building_ids": ["beekeeper"],

@@ -44,7 +44,8 @@
       ],
       "output": "minecraft:white_bed",
       "output_amount": 1,
-      "output_capacity_stacks": 1
+      "output_capacity_stacks": 1,
+      "output_capacity_units": 3
     },
     {
       "inputs": [

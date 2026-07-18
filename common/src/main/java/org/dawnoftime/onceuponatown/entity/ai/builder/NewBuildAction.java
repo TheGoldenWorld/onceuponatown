@@ -7,7 +7,11 @@ import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import org.dawnoftime.onceuponatown.building.schematic.BlockStep;
-import org.dawnoftime.onceuponatown.building.schematic.BuildSchematic;
+import org.dawnoftime.onceuponatown.building.schematic.ConnectorReader;
+import org.dawnoftime.onceuponatown.building.schematic.SchematicPlacer;
+import org.dawnoftime.onceuponatown.building.schematic.TerrainMatchedPlacer;
+import org.dawnoftime.onceuponatown.building.schematic.SchematicBounds;
+import org.dawnoftime.onceuponatown.building.schematic.SchematicConstants;
 import org.dawnoftime.onceuponatown.building.schematic.EntityStep;
 import org.dawnoftime.onceuponatown.building.schematic.PlacementStep;
 import org.dawnoftime.onceuponatown.building.schematic.SchematicBlock;
@@ -73,7 +77,7 @@ public class NewBuildAction implements BuilderAction {
     @Override
     public boolean executeInstant(ServerLevel level, Npc npc) {
         List<BlockPos> collected = new ArrayList<>();
-        boolean ok = BuildSchematic.placeTerrainMatched(level, finalPlacementPos, def.nbt, rotation, def.obstacleBlocks, collected);
+        boolean ok = TerrainMatchedPlacer.placeTerrainMatched(level, finalPlacementPos, def.nbt, rotation, def.obstacleBlocks, collected);
         obstaclePositions = collected;
         return ok;
     }
@@ -99,7 +103,7 @@ public class NewBuildAction implements BuilderAction {
         if (def.terrainMatching) {
             if (skipTerrainPrep) {
                 // Resume: recompute Y-adjusted positions and filter blocks already placed.
-                List<SchematicBlock> full = BuildSchematic.prepareTerrainMatchedBlocks(
+                List<SchematicBlock> full = TerrainMatchedPlacer.prepareTerrainMatchedBlocks(
                     level, finalPlacementPos, def.nbt, rotation, def.obstacleBlocks, null);
                 List<SchematicBlock> remaining = full.stream()
                     .filter(b -> !level.getBlockState(finalPlacementPos.offset(b.localPos())).equals(b.state()))
@@ -107,7 +111,7 @@ public class NewBuildAction implements BuilderAction {
                 return buildStepList(remaining, template);
             }
             List<BlockPos> collected = new ArrayList<>();
-            List<SchematicBlock> result = BuildSchematic.prepareTerrainMatchedBlocks(
+            List<SchematicBlock> result = TerrainMatchedPlacer.prepareTerrainMatchedBlocks(
                 level, finalPlacementPos, def.nbt, rotation, def.obstacleBlocks, collected);
             obstaclePositions = collected;
             return buildStepList(result, template);
@@ -115,7 +119,7 @@ public class NewBuildAction implements BuilderAction {
 
         if (skipTerrainPrep) {
             // Resume: skip terrain carving and return only blocks not yet in the world.
-            return buildStepList(BuildSchematic.computeRemainingBlocks(level, finalPlacementPos, def.nbt, rotation), template);
+            return buildStepList(SchematicPlacer.computeRemainingBlocks(level, finalPlacementPos, def.nbt, rotation), template);
         }
 
         TerrainCarver.prePlace(level, finalPlacementPos, template, rotation);
@@ -134,13 +138,13 @@ public class NewBuildAction implements BuilderAction {
 
         for (SchematicBlock b : rawBlocks) {
             BlockStep step = new BlockStep(finalPlacementPos.offset(b.localPos()), b.state(), b.nbt());
-            if (BuildSchematic.DEFERRED_PLACEMENT_PRIORITY.containsKey(b.state().getBlock())) {
+            if (SchematicConstants.DEFERRED_PLACEMENT_PRIORITY.containsKey(b.state().getBlock())) {
                 deferred.add(step);
             } else {
                 normal.add(step);
             }
         }
-        deferred.sort(Comparator.comparingInt(b -> BuildSchematic.DEFERRED_PLACEMENT_PRIORITY.get(b.state().getBlock())));
+        deferred.sort(Comparator.comparingInt(b -> SchematicConstants.DEFERRED_PLACEMENT_PRIORITY.get(b.state().getBlock())));
 
         List<SchematicEntity> entities = SchematicReader.readEntities(template, rotation, finalPlacementPos);
 
@@ -156,16 +160,16 @@ public class NewBuildAction implements BuilderAction {
     @Override
     public void onComplete(ServerLevel level, Npc npc) {
         town.getTownInventory().removeStock(constructionCost);
-        BuildSchematic.replaceJigsawInWorld(level, usedConnection.pos());
+        SchematicPlacer.replaceJigsawInWorld(level, usedConnection.pos());
 
-        List<ConnectionPoint> connections = BuildSchematic.readJigsawPoints(
+        List<ConnectionPoint> connections = ConnectorReader.readJigsawPoints(
             level, finalPlacementPos, def.id, rotation, entryConnectorWorldPos, def.terrainMatching);
         BoundingBox bb = def.terrainMatching
-            ? BuildSchematic.computeFootprintBoundingBox(level, finalPlacementPos, def.nbt, rotation)
+            ? SchematicBounds.computeFootprintBoundingBox(level, finalPlacementPos, def.nbt, rotation)
                 .orElseGet(() -> new BoundingBox(
                     finalPlacementPos.getX(), finalPlacementPos.getY(), finalPlacementPos.getZ(),
                     finalPlacementPos.getX(), finalPlacementPos.getY(), finalPlacementPos.getZ()))
-            : BuildSchematic.computeBoundingBox(level, finalPlacementPos, def.nbt, rotation)
+            : SchematicBounds.computeBoundingBox(level, finalPlacementPos, def.nbt, rotation)
                 .orElseGet(() -> new BoundingBox(
                     finalPlacementPos.getX(), finalPlacementPos.getY(), finalPlacementPos.getZ(),
                     finalPlacementPos.getX(), finalPlacementPos.getY(), finalPlacementPos.getZ()));

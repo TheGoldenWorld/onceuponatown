@@ -17,7 +17,7 @@
     { "defId": "merchant_shop", "count": 1 }
   ],
 
-  "auto_build_sequence": ["house_2", "merchant_shop", "house_2"],
+  "auto_build_sequence": [{"defId": "grove", "count": 3}, "merchant_shop", "carpenter"],
 
 
   "auto_upgrade_ids": ["settlement_3"],

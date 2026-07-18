@@ -1,0 +1,28 @@
+{
+  "id": "town_hall",
+  "nbt": "ouatej:ouatej/starters/town_hall",
+  "entry_pool": "ouatej:ouatej/starters",
+  "category": "town_center",
+  "icon_item": "minecraft:campfire",
+  "weight": 0,
+
+  "initial_stock": [
+    { "item": "minecraft:oak_log", "amount": 10 },
+    { "item": "minecraft:cobblestone", "amount": 10 }
+  ],
+
+  "production": [
+    {
+      "item": "minecraft:oak_log",
+      "amount": 1,
+      "every_ticks": 1200,
+      "capacity_stacks": 2
+    },
+    {
+      "item": "minecraft:cobblestone",
+      "amount": 1,
+      "every_ticks": 1800,
+      "capacity_stacks": 1
+    }
+  ]
+}

@@ -17,8 +17,7 @@
     { "defId": "wheat_farm", "count": 1 }
   ],
 
-  "auto_build_sequence": ["wheat_farm", "house"],
-
+  "auto_build_sequence": [{"defId": "grove", "count": 3}, {"defId": "wheat_field", "count": 2}, "wheat_farm", "carpenter"],
 
   "auto_upgrade_ids": ["settlement_3"],
   "unlocked_building_ids": ["granary"],

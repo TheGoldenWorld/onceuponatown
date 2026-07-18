@@ -1,0 +1,15 @@
+{
+  "id": "builder",
+  "nbt": "ouatej:ouatej/jobs/builder",
+  "entry_pool": "ouatej:jobs",
+  "icon_item": "minecraft:oak_planks",
+  "category": "jobs",
+  "weight": 1,
+
+  "construction_cost": [
+    {
+      "item": "minecraft:oak_log",
+      "amount": 10
+    }
+  ]
+}

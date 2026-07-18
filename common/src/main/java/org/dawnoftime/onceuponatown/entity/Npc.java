@@ -36,6 +36,9 @@ public class Npc extends PathfinderMob {
     // Incremented on each block placement; client reads changes to trigger the swing animation.
     private static final EntityDataAccessor<Integer> DATA_BUILD_GENERATION =
         SynchedEntityData.defineId(Npc.class, EntityDataSerializers.INT);
+    // Synced so the client renderer can pick the correct clothes texture.
+    private static final EntityDataAccessor<String> DATA_JOB_ID =
+        SynchedEntityData.defineId(Npc.class, EntityDataSerializers.STRING);
 
     // Client-side animation state: written by NpcModel.setupAnim(), never synced or saved.
     public int clientLastBuildGeneration = -1;
@@ -45,6 +48,8 @@ public class Npc extends PathfinderMob {
     private String jobId = "builder";
     // Server-side countdown -- cleared to 0 when the reading animation ends.
     private int readingTicksRemaining = 0;
+    // Set to true by the job while the NPC is actively placing blocks, so LookAtPlayerGoal is suppressed.
+    private boolean suppressLookAtPlayer = false;
     // Anchor position of the town this builder belongs to; saved so the builder can self-validate on load.
     private BlockPos townAnchorPos = null;
     // Whether the anchor ownership check has been performed this session.
@@ -62,6 +67,7 @@ public class Npc extends PathfinderMob {
         super.defineSynchedData();
         this.entityData.define(DATA_IS_READING, false);
         this.entityData.define(DATA_BUILD_GENERATION, 0);
+        this.entityData.define(DATA_JOB_ID, "builder");
     }
 
     @Override
@@ -83,7 +89,10 @@ public class Npc extends PathfinderMob {
     protected void registerGoals() {
         this.goalSelector.addGoal(1, new OpenDoorGoal(this, false));
         this.goalSelector.addGoal(2, new OpenFenceGateGoal(this));
-        this.goalSelector.addGoal(10, new LookAtPlayerGoal(this, Player.class, 8.0f));
+        this.goalSelector.addGoal(10, new LookAtPlayerGoal(this, Player.class, 8.0f) {
+            @Override public boolean canUse()         { return !suppressLookAtPlayer && super.canUse(); }
+            @Override public boolean canContinueToUse() { return !suppressLookAtPlayer && super.canContinueToUse(); }
+        });
     }
 
     @Override
@@ -117,15 +126,18 @@ public class Npc extends PathfinderMob {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
-        if (tag.contains("JobId")) jobId = tag.getString("JobId");
+        if (tag.contains("JobId")) setJobId(tag.getString("JobId"));
         if (tag.contains("TownAnchorPos")) townAnchorPos = NbtUtils.readBlockPos(tag.getCompound("TownAnchorPos"));
     }
 
     public void setTownAnchorPos(BlockPos pos) { this.townAnchorPos = pos; }
     public BlockPos getTownAnchorPos() { return townAnchorPos; }
 
-    public String getJobId() { return jobId; }
-    public void setJobId(String jobId) { this.jobId = jobId; }
+    public String getJobId() { return entityData.get(DATA_JOB_ID); }
+    public void setJobId(String jobId) {
+        this.jobId = jobId;
+        entityData.set(DATA_JOB_ID, jobId);
+    }
 
     @Override
     protected SoundEvent getAmbientSound() { return SoundEvents.VILLAGER_AMBIENT; }
@@ -186,6 +198,8 @@ public class Npc extends PathfinderMob {
     public void notifyBlockPlaced() {
         entityData.set(DATA_BUILD_GENERATION, entityData.get(DATA_BUILD_GENERATION) + 1);
     }
+
+    public void setSuppressLookAtPlayer(boolean suppress) { this.suppressLookAtPlayer = suppress; }
 
     public boolean isReading() { return entityData.get(DATA_IS_READING); }
     public int getBuildGeneration() { return entityData.get(DATA_BUILD_GENERATION); }

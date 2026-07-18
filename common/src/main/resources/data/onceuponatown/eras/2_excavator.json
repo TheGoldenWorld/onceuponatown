@@ -6,6 +6,7 @@
   "icon_item": "minecraft:blast_furnace",
 
   "weight_cap_increase": 10,
+  "max_upgrade_level": 2,
 
   "resource_cost": [
     { "item": "minecraft:oak_log", "amount": 42 },
@@ -18,7 +19,7 @@
     { "defId": "stone_breach", "count": 2 }
   ],
 
-  "auto_build_sequence": ["stone_breach", "lumberjack", "oven", "stone_breach", "house_3"],
+  "auto_build_sequence": [{"defId": "grove", "count": 2}, "oven", {"defId": "stone_breach", "count": 2}, "lumberjack"],
 
   "unlocked_building_ids": ["lone_place", "carpenter", "open_mine"],
   "unlock_npc_counts": { "builder": 1 },

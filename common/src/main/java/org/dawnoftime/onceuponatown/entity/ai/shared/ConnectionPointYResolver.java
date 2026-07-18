@@ -5,7 +5,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
-import org.dawnoftime.onceuponatown.building.schematic.BuildSchematic;
+import org.dawnoftime.onceuponatown.building.schematic.SchematicConstants;
 import org.dawnoftime.onceuponatown.town.ConnectionPoint;
 
 public class ConnectionPointYResolver {
@@ -22,7 +22,7 @@ public class ConnectionPointYResolver {
         if (scanStart < 0) return point;
         for (int y = scanStart; y >= level.getMinBuildHeight(); y--) {
             BlockState bs = level.getBlockState(new BlockPos(wx, y, wz));
-            if (!bs.isAir() && (!BuildSchematic.SCAN_IGNORE_BLOCKS.contains(bs.getBlock()) || bs.is(Blocks.JIGSAW))) {
+            if (!bs.isAir() && (!SchematicConstants.SCAN_IGNORE_BLOCKS.contains(bs.getBlock()) || bs.is(Blocks.JIGSAW))) {
                 if (y == point.pos().getY()) return point;
                 return new ConnectionPoint(
                     new BlockPos(wx, y, wz),

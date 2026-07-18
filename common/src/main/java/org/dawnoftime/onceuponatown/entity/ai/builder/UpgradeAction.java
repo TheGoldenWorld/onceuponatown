@@ -6,7 +6,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import org.dawnoftime.onceuponatown.building.schematic.BlockStep;
-import org.dawnoftime.onceuponatown.building.schematic.BuildSchematic;
+import org.dawnoftime.onceuponatown.building.schematic.ConnectorReader;
+import org.dawnoftime.onceuponatown.building.schematic.SchematicConstants;
+import org.dawnoftime.onceuponatown.building.schematic.SchematicDiffer;
 import org.dawnoftime.onceuponatown.building.schematic.EntityStep;
 import org.dawnoftime.onceuponatown.building.schematic.PlacementStep;
 import org.dawnoftime.onceuponatown.building.schematic.SchematicBlock;
@@ -74,7 +76,7 @@ public class UpgradeAction implements BuilderAction {
 
         if (fromNbt == null || toNbt == null) return List.of();
 
-        BuildSchematic.DiffResult diff = BuildSchematic.computeDiff(level, fromNbt, toNbt, building.rotation, undergroundDepth);
+        SchematicDiffer.DiffResult diff = SchematicDiffer.computeDiff(level, fromNbt, toNbt, building.rotation, undergroundDepth);
 
         List<PlacementStep> steps = new ArrayList<>(diff.toRemove().size() + diff.toAdd().size());
 
@@ -88,19 +90,19 @@ public class UpgradeAction implements BuilderAction {
         List<BlockStep> deferred = new ArrayList<>();
         for (SchematicBlock b : diff.toAdd()) {
             BlockStep step = new BlockStep(getOrigin().offset(b.localPos()), b.state(), b.nbt());
-            if (BuildSchematic.DEFERRED_PLACEMENT_PRIORITY.containsKey(b.state().getBlock())) {
+            if (SchematicConstants.DEFERRED_PLACEMENT_PRIORITY.containsKey(b.state().getBlock())) {
                 deferred.add(step);
             } else {
                 normal.add(step);
             }
         }
-        deferred.sort(Comparator.comparingInt(b -> BuildSchematic.DEFERRED_PLACEMENT_PRIORITY.get(b.state().getBlock())));
+        deferred.sort(Comparator.comparingInt(b -> SchematicConstants.DEFERRED_PLACEMENT_PRIORITY.get(b.state().getBlock())));
         steps.addAll(normal);
         steps.addAll(deferred);
 
         // Entity diff: entities present in toNbt but not in fromNbt, appended last so all
         // blocks are placed before entities spawn. UUID is randomized in BuildGoal per EntityStep.
-        List<SchematicEntity> entityDiff = BuildSchematic.computeEntityDiff(
+        List<SchematicEntity> entityDiff = SchematicDiffer.computeEntityDiff(
             level, fromNbt, toNbt, building.rotation, building.worldPos, undergroundDepth);
         for (SchematicEntity se : entityDiff) {
             steps.add(new EntityStep(se.worldPos(), se.nbt()));
@@ -124,7 +126,7 @@ public class UpgradeAction implements BuilderAction {
         if (newLevel <= def.nbtLevels.size()) {
             BuildingDef.NbtLevel newNbtLevel = def.nbtLevels.get(newLevel - 1);
             BlockPos jigsawOrigin = building.worldPos.offset(0, -newNbtLevel.undergroundDepth(), 0);
-            List<ConnectionPoint> newPoints = BuildSchematic.readJigsawPointsFromNbt(
+            List<ConnectionPoint> newPoints = ConnectorReader.readJigsawPointsFromNbt(
                 level, jigsawOrigin, newNbtLevel.nbt(), building.rotation);
             List<ConnectionPoint> existing = town.getAvailableConnectionPoints();
             for (ConnectionPoint cp : newPoints) {

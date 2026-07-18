@@ -114,23 +114,26 @@ public class NetworkHelper {
     }
 
     private static Component formatLogEntryForChat(TownLogEntry entry) {
-        MutableComponent prefix = Component.literal("[Village] ").withStyle(s -> s.withColor(0xFFAA00));
         String param = entry.param();
         MutableComponent body = switch (entry.type()) {
-            case BUILD_START   -> Component.literal("Builder: starting ").append(Component.translatable("onceuponatown.building." + param));
-            case BUILD_DONE    -> Component.literal("Builder: ").append(Component.translatable("onceuponatown.building." + param)).append(" built");
-            case UPGRADE_START -> Component.literal("Builder: upgrading ").append(Component.translatable("onceuponatown.building." + param));
-            case UPGRADE_DONE  -> Component.literal("Builder: ").append(Component.translatable("onceuponatown.building." + param)).append(" upgraded");
-            case FOOD_CONSUMED -> Component.literal("Village consumed " + param + " food units");
-            case VILLAGE_FULL  -> Component.literal("No space left to expand");
+            case BUILD_START      -> Component.literal("Builder: starting ").append(Component.translatable("onceuponatown.building." + param));
+            case BUILD_DONE       -> Component.literal("Builder: ").append(Component.translatable("onceuponatown.building." + param)).append(" built");
+            case UPGRADE_START    -> Component.literal("Builder: upgrading ").append(Component.translatable("onceuponatown.building." + param));
+            case UPGRADE_DONE     -> Component.literal("Builder: ").append(Component.translatable("onceuponatown.building." + param)).append(" upgraded");
+            case FOOD_CONSUMED    -> Component.literal("Village: consumed " + param + " food units");
+            case VILLAGE_FULL     -> Component.literal("Village: no space left to expand");
+            case AUTONOMY_PLANNED -> Component.literal("Village: plans to build ").append(Component.translatable("onceuponatown.building." + param));
+            case RESIDENT_PLANNED -> Component.literal("Village: plans housing " + param);
         };
         int color = switch (entry.type()) {
             case BUILD_START, UPGRADE_START -> 0xAAAAFF;
             case BUILD_DONE, UPGRADE_DONE   -> 0x55FF55;
             case FOOD_CONSUMED              -> 0xDDDDDD;
             case VILLAGE_FULL               -> 0xFF5555;
+            case AUTONOMY_PLANNED           -> 0xFFAA55;
+            case RESIDENT_PLANNED           -> 0xFFAA55;
         };
-        return prefix.append(body.withStyle(s -> s.withColor(color)));
+        return body.withStyle(s -> s.withColor(color));
     }
 
     private static List<ServerPlayer> getWatchers(ServerLevel level, BlockPos anchorPos) {

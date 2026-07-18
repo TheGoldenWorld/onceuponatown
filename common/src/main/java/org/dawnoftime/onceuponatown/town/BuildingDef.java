@@ -7,6 +7,7 @@ import java.util.List;
 
 public class BuildingDef {
     public final String id;
+    public final String namespace;
     public final ResourceLocation nbt;
     // Pool name of this building's entry jigsaw. Must match the targetPool of the connection point.
     // Empty string means this building can be placed at any connection regardless of pool.
@@ -79,7 +80,7 @@ public class BuildingDef {
                                          int resolvedResidents, float resolvedConsumptionPerResident,
                                          int resolvedHerd, float resolvedConsumptionPerHerd) {}
 
-    public BuildingDef(String id, ResourceLocation nbt, String entryPool,
+    public BuildingDef(String id, String namespace, ResourceLocation nbt, String entryPool,
                        List<ProductionEntry> production, List<ItemCost> constructionCost,
                        boolean terrainMatching, String iconItem, String category,
                        List<String> footprint,
@@ -92,6 +93,7 @@ public class BuildingDef {
                        int herd, float consumptionPerHerd, int weight,
                        List<String> obstacleBlocks, String spawnsNpcJob) {
         this.id = id;
+        this.namespace = namespace;
         this.nbt = nbt;
         this.entryPool = entryPool;
         this.production = production;
@@ -160,6 +162,7 @@ public class BuildingDef {
                 e.amount() + finalAmountAdd,
                 e.everyTicks(),
                 e.capacityStacks() + finalCapAdd,
+                e.capacityUnits(),
                 e.unlockAtLevel()))
             .toList();
         return new ResolvedBuildingStats(adjusted, totalCadence, resolvedResidents, resolvedConsumption, resolvedHerd, resolvedHerdConsumption);

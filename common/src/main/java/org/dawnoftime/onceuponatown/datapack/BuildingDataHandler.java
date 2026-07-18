@@ -39,7 +39,7 @@ public class BuildingDataHandler {
             .forEach((location, resource) -> {
                 try (InputStreamReader reader = new InputStreamReader(resource.open())) {
                     JsonObject json = GSON.fromJson(reader, JsonObject.class);
-                    BuildingDef def = parseDef(json);
+                    BuildingDef def = parseDef(json, location.getNamespace());
                     REGISTRY.put(def.id, def);
                 } catch (Exception e) {
                     LOGGER.error("[OUAT] Failed to load building def {}: {}", location, e.getMessage());
@@ -47,7 +47,7 @@ public class BuildingDataHandler {
             });
     }
 
-    private static BuildingDef parseDef(JsonObject json) {
+    private static BuildingDef parseDef(JsonObject json, String namespace) {
         String id = json.get("id").getAsString();
         ResourceLocation nbt = new ResourceLocation(json.get("nbt").getAsString());
 
@@ -57,11 +57,13 @@ public class BuildingDataHandler {
                 JsonObject p = el.getAsJsonObject();
                 Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(p.get("item").getAsString()));
                 int unlockAtLevel = p.has("unlock_at_level") ? p.get("unlock_at_level").getAsInt() : -1;
+                int capacityUnits = p.has("capacity_units") ? p.get("capacity_units").getAsInt() : -1;
                 production.add(new ProductionEntry(
                     item,
                     p.get("amount").getAsInt(),
                     p.get("every_ticks").getAsInt(),
                     p.get("capacity_stacks").getAsInt(),
+                    capacityUnits,
                     unlockAtLevel
                 ));
             }
@@ -101,11 +103,13 @@ public class BuildingDataHandler {
                 }
                 Item outputItem = BuiltInRegistries.ITEM.get(new ResourceLocation(t.get("output").getAsString()));
                 int unlockAtLevel = t.has("unlock_at_level") ? t.get("unlock_at_level").getAsInt() : -1;
+                int outputCapacityUnits = t.has("output_capacity_units") ? t.get("output_capacity_units").getAsInt() : -1;
                 transformations.add(new TransformationRecipe(
                     inputs,
                     outputItem,
                     t.get("output_amount").getAsInt(),
                     t.get("output_capacity_stacks").getAsInt(),
+                    outputCapacityUnits,
                     unlockAtLevel
                 ));
             }
@@ -203,7 +207,7 @@ public class BuildingDataHandler {
 
         String spawnsNpcJob = json.has("spawns_npc") ? json.get("spawns_npc").getAsString() : null;
 
-        return new BuildingDef(id, nbt, entryPool, production, costs, terrainMatching, iconItem, category, footprint,
+        return new BuildingDef(id, namespace, nbt, entryPool, production, costs, terrainMatching, iconItem, category, footprint,
             transformations, transformInputRatio, transformEveryTicks,
             productionBonus, stockBonus, residents, upgrades, nbtLevels,
             requiredResidents, requiredBuildings, consumptionPerResident, initialStock,

@@ -17,7 +17,7 @@ import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.block.Rotation;
 import org.dawnoftime.onceuponatown.Ouat;
 import org.dawnoftime.onceuponatown.blockentity.TownAnchorBlockEntity;
-import org.dawnoftime.onceuponatown.building.schematic.BuildSchematic;
+import org.dawnoftime.onceuponatown.building.schematic.ConnectorReader;
 import org.dawnoftime.onceuponatown.datapack.BuildingDataHandler;
 import org.dawnoftime.onceuponatown.datapack.EraTransitionDataHandler;
 import org.dawnoftime.onceuponatown.registry.BlockRegistry;
@@ -125,11 +125,11 @@ public class ChunkGeneratorMixin {
                         // consistent with NPC-placed buildings (both use template origin, not bbMin).
                         // For NONE rotation the two are identical; for rotated pieces they differ.
                         BuildingDef def = BuildingDataHandler.get(defId).get();
-                        BlockPos origin = BuildSchematic.computeOriginFromBbMin(serverLevel, bbMin, def.nbt, rotation);
+                        BlockPos origin = ConnectorReader.computeOriginFromBbMin(serverLevel, bbMin, def.nbt, rotation);
                         List<ConnectionPoint> allPoints =
-                            BuildSchematic.readJigsawPointsAll(serverLevel, bbMin, defId, rotation);
+                            ConnectorReader.readJigsawPointsAll(serverLevel, bbMin, defId, rotation);
                         entries.add(new PieceEntry(origin, defId, pieceBb, allPoints, rotation));
-                        BuildSchematic.readAllJigsawPositions(serverLevel, bbMin, defId, rotation)
+                        ConnectorReader.readAllJigsawPositions(serverLevel, bbMin, defId, rotation)
                             .forEach(allJigsawPositions::add);
                     }
                 }

@@ -210,6 +210,8 @@ public class TownSummaryWidget extends DraggableWidget {
             case BUILD_DONE, UPGRADE_DONE   -> 0xFF55FF55;
             case FOOD_CONSUMED              -> 0xFFDDDDDD;
             case VILLAGE_FULL               -> 0xFFFF5555;
+            case AUTONOMY_PLANNED           -> 0xFFFFAA55;
+            case RESIDENT_PLANNED           -> 0xFFFFAA55;
         };
     }
 
@@ -217,12 +219,14 @@ public class TownSummaryWidget extends DraggableWidget {
         String param = entry.param();
         String resolved = param.isEmpty() ? "" : Component.translatable("onceuponatown.building." + param).getString();
         String text = switch (entry.type()) {
-            case BUILD_START    -> "Builder: starting " + resolved;
-            case BUILD_DONE     -> "Builder: " + resolved + " built";
-            case UPGRADE_START  -> "Builder: upgrading " + resolved;
-            case UPGRADE_DONE   -> "Builder: " + resolved + " upgraded";
-            case FOOD_CONSUMED  -> "Village consumed " + param + " food units";
-            case VILLAGE_FULL   -> "Village: no space left to expand";
+            case BUILD_START      -> "Builder: starting " + resolved;
+            case BUILD_DONE       -> "Builder: " + resolved + " built";
+            case UPGRADE_START    -> "Builder: upgrading " + resolved;
+            case UPGRADE_DONE     -> "Builder: " + resolved + " upgraded";
+            case FOOD_CONSUMED    -> "Village: consumed " + param + " food units";
+            case VILLAGE_FULL     -> "Village: no space left to expand";
+            case AUTONOMY_PLANNED -> "Village: plans to build " + resolved;
+            case RESIDENT_PLANNED -> "Village: plans housing " + resolved;
         };
         int color = logColor(entry.type());
         return Component.literal(text).withStyle(s -> s.withColor(color));

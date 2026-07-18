@@ -17,7 +17,9 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import org.dawnoftime.onceuponatown.Constants;
-import org.dawnoftime.onceuponatown.building.schematic.BuildSchematic;
+import org.dawnoftime.onceuponatown.building.schematic.ConnectorReader;
+import org.dawnoftime.onceuponatown.building.schematic.TerrainMatchedPlacer;
+import org.dawnoftime.onceuponatown.building.schematic.SchematicBounds;
 import org.dawnoftime.onceuponatown.building.schematic.JigsawConnector;
 import org.dawnoftime.onceuponatown.datapack.BuilderConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuildingDataHandler;
@@ -126,6 +128,8 @@ public class BuilderJob implements NpcJob {
             }
         }
 
+        npc.setSuppressLookAtPlayer(current == State.BUILD);
+
         switch (current) {
             case IDLE     -> tickIdle();
             case BUILD    -> tickBuild();
@@ -146,7 +150,7 @@ public class BuilderJob implements NpcJob {
                     BuildGoal resumed = BuildGoal.fromActiveBuildState(saved, npc, resumeTown, resumeLevel);
                     if (resumed != null) {
                         QueueEntry tentativeEntry = saved.queueDefId() != null
-                            ? new QueueEntry.NewBuild(saved.queueEntryId(), saved.queueDefId(), false) : null;
+                            ? new QueueEntry.NewBuild(saved.queueEntryId(), saved.queueDefId(), false, false, false) : null;
                         // If this entry is already claimed by another builder (e.g. after a reload
                         // where claims were lost and another builder scanned first), discard the
                         // stale save so we don't double-build the same queue entry.
@@ -181,6 +185,18 @@ public class BuilderJob implements NpcJob {
 
         Town town = findTown(serverLevel, npc);
         if (town == null) return;
+
+        // Pre-register claims from persisted activeBuilds so a concurrent builder cannot steal
+        // a queued entry before its owner resumes on the first idle tick after a server restart.
+        town.getActiveBuilds().forEach((slot, savedState) -> {
+            if (savedState.queueEntryId() >= 0) {
+                UUID builderUUID = town.getNpcAtSlot("builder", slot);
+                if (builderUUID != null) {
+                    int idx = town.findQueueIndex(savedState.queueEntryId());
+                    if (idx >= 0) town.claimQueueEntry(idx, builderUUID);
+                }
+            }
+        });
 
         if (town.getConstructionQueue().isEmpty()) {
             tryStartActivity(town);
@@ -229,8 +245,26 @@ public class BuilderJob implements NpcJob {
                 continue;
             }
 
-            anyUnclaimed = true;
             QueueEntry entry = queue.get(i);
+
+            // Planned entries have no reserved stock; skip until EraManager promotes them.
+            // Treated like claimed entries so they don't trigger street extension.
+            if (entry instanceof QueueEntry.NewBuild nb && nb.planned()) {
+                if (nb.residentTrack() && !warnedDefIds.contains(nb.defId())) {
+                    LOGGER.info("[OUAT-Builder] ResidentTrack entry '{}' is PLANNED -- skipping (stock not reserved yet)", nb.defId());
+                    warnedDefIds.add(nb.defId());
+                }
+                queueCursor = i + 1;
+                continue;
+            }
+
+            // Planned autonomous upgrade entries have no reserved stock; skip until EraManager promotes them.
+            if (entry instanceof QueueEntry.Upgrade u && u.planned()) {
+                queueCursor = i + 1;
+                continue;
+            }
+
+            anyUnclaimed = true;
 
             // Upgrade entries: walk to the building and run the visual diff.
             if (entry instanceof QueueEntry.Upgrade upgradeEntry) {
@@ -353,12 +387,12 @@ public class BuilderJob implements NpcJob {
     private void tickStreetsOnly(ServerLevel serverLevel, Town town,
                                   List<ConnectionPoint> freePoints, List<BoundingBox> occupied) {
         List<BuildingDef> streetCandidates = new ArrayList<>(town.getBuildableBuildings().stream()
-            .filter(d -> Constants.STREETS_POOL.equals(d.entryPool))
+            .filter(d -> Constants.isStreetsPool(d.entryPool))
             .toList());
 
         List<ConnectionPoint> streetCps = new ArrayList<>();
         for (ConnectionPoint cp : freePoints) {
-            if (Constants.STREETS_POOL.equals(cp.targetName())) streetCps.add(cp);
+            if (Constants.isStreetsPool(cp.targetName())) streetCps.add(cp);
         }
         streetCps.sort(java.util.Comparator.comparingLong(ConnectionPoint::insertionOrder));
 
@@ -442,7 +476,7 @@ public class BuilderJob implements NpcJob {
     // whose target pool matches one of the pools needed by blocked queue entries.
     private boolean offersNeededConnector(ServerLevel level, BuildingDef road, Set<String> neededPools) {
         if (neededPools.isEmpty()) return false;
-        for (JigsawConnector c : BuildSchematic.readConnectors(level, road.nbt)) {
+        for (JigsawConnector c : ConnectorReader.readConnectors(level, road.nbt)) {
             if (!c.pool().isEmpty() && !c.pool().equals("minecraft:empty")
                     && neededPools.contains(c.target())) {
                 return true;
@@ -456,7 +490,7 @@ public class BuilderJob implements NpcJob {
     private PlacementOutcome attemptPlacement(ServerLevel serverLevel, ConnectionPoint point,
                                                List<BoundingBox> occupied,
                                                BuildingDef def) {
-        List<JigsawConnector> connectors = BuildSchematic.readConnectors(serverLevel, def.nbt);
+        List<JigsawConnector> connectors = ConnectorReader.readConnectors(serverLevel, def.nbt);
         List<JigsawConnector> compatible = connectors.stream()
             .filter(c -> point.targetName().isEmpty() || c.name().equals(point.targetName()))
             .toList();
@@ -475,14 +509,14 @@ public class BuilderJob implements NpcJob {
         shuffleInPlace(shuffled);
 
         BlockPos attachPoint = point.pos().relative(point.direction());
-        int terrainY = def.terrainMatching ? BuildSchematic.findGroundY(serverLevel, attachPoint) : 0;
+        int terrainY = def.terrainMatching ? TerrainMatchedPlacer.findGroundY(serverLevel, attachPoint) : 0;
 
         int waterBlocked = 0;
 
         for (JigsawConnector chosen : shuffled) {
-            Rotation rotation = BuildSchematic.computeRequiredRotation(
+            Rotation rotation = SchematicBounds.computeRequiredRotation(
                 chosen.facing(), point.direction().getOpposite());
-            BlockPos rawPos = BuildSchematic.computeCandidatePosition(
+            BlockPos rawPos = SchematicBounds.computeCandidatePosition(
                 point.pos(), point.direction(), chosen.posInTemplate(), rotation);
 
             // For terrain-matching (roads): anchor Y to ground level at the attach point.
@@ -494,10 +528,10 @@ public class BuilderJob implements NpcJob {
             BlockPos finalPos = new BlockPos(rawPos.getX(), finalY, rawPos.getZ());
 
             Optional<BoundingBox> maybeBb = def.terrainMatching
-                ? BuildSchematic.computeFootprintBoundingBox(serverLevel, finalPos, def.nbt, rotation)
-                : BuildSchematic.computeBoundingBox(serverLevel, finalPos, def.nbt, rotation);
+                ? SchematicBounds.computeFootprintBoundingBox(serverLevel, finalPos, def.nbt, rotation)
+                : SchematicBounds.computeBoundingBox(serverLevel, finalPos, def.nbt, rotation);
 
-            if (BuildSchematic.footprintContainsWater(serverLevel, finalPos, def.nbt, rotation)) {
+            if (SchematicBounds.footprintContainsWater(serverLevel, finalPos, def.nbt, rotation)) {
                 waterBlocked++;
                 continue;
             }
@@ -513,10 +547,6 @@ public class BuilderJob implements NpcJob {
 
             BlockPos entryConnectorWorldPos = finalPos.offset(
                 StructureTemplate.transform(chosen.posInTemplate(), Mirror.NONE, rotation, BlockPos.ZERO));
-
-            LOGGER.info("[PLACEMENT] building={} parentConnector={}(dir={}) entryLocalPos={} rotation={} rawPos={} finalPos={} entryConnectorWorld={}",
-                def.id, point.pos(), point.direction(), chosen.posInTemplate(), rotation,
-                rawPos, finalPos, entryConnectorWorldPos);
 
             return PlacementOutcome.ok(finalPos, rotation, entryConnectorWorldPos, maybeBb.orElse(null));
         }
@@ -585,6 +615,8 @@ public class BuilderJob implements NpcJob {
             for (int i = 0; i < queue.size(); i++) {
                 if (town.isQueueEntryClaimedByOther(i, myId)) continue;
                 QueueEntry entry = queue.get(i);
+                if (entry instanceof QueueEntry.NewBuild nb && nb.planned()) continue;
+                if (entry instanceof QueueEntry.Upgrade u && u.planned()) continue;
                 if (entry instanceof QueueEntry.Upgrade) {
                     hasUnclaimedWork = true;
                     break;
@@ -736,10 +768,23 @@ public class BuilderJob implements NpcJob {
 
     // Interrupts whatever the builder was doing and switches to SLEEPING.
     // ACTIVITY: cancelActivity() cleans up hands, navigation, and currentActivity.
-    // BUILD: activeBuild is nulled here; Town.ActiveBuildState persists the resume point and
-    //        tickIdle() will reconstruct the BuildGoal on the next morning cycle.
+    // BUILD (NewBuild): ActiveBuildState persists the resume point; tickIdle() reconstructs it on wake.
+    // BUILD (Upgrade): no ActiveBuildState is saved; the queue entry stays and the NPC restarts the
+    //   upgrade on wake via a fresh computeDiff. We must clear underUpgrade and release the queue
+    //   claim here so the guard in tickPlayerQueue() does not permanently skip the entry.
     private void enterSleep() {
         if (current == State.ACTIVITY) cancelActivity();
+        if (current == State.BUILD && activeQueueEntry instanceof QueueEntry.Upgrade u) {
+            if (npc.level() instanceof ServerLevel sl) {
+                Town t = findTown(sl, npc);
+                if (t != null) {
+                    t.removeUnderUpgrade(u.buildingWorldPos());
+                    int idx = t.findQueueIndex(u.entryId());
+                    if (idx >= 0) t.releaseQueueClaim(idx, npc.getUUID());
+                    LevelTowns.get(sl).markDirty();
+                }
+            }
+        }
         npc.getNavigation().stop();
         npc.freeHands();
         activeBuild      = null;

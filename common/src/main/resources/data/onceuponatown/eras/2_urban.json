@@ -6,6 +6,7 @@
   "icon_item": "minecraft:emerald",
 
   "weight_cap_increase": 10,
+  "max_upgrade_level": 2,
 
   "resource_cost": [
     { "item": "minecraft:oak_log", "amount": 42 },
@@ -17,7 +18,7 @@
     { "defId": "wild_spot", "count": 1 }
   ],
 
-  "auto_build_sequence": ["oven", "lumberjack", "house_3", "wild_spot", "house_2", "house_3", "house_2"],
+  "auto_build_sequence": [{"defId": "grove", "count": 2}, "oven", "wild_spot", "lumberjack"],
 
 
   "unlocked_building_ids": ["lone_garden", "carpenter", "merchant_shop", "lone_place", "fountain_place"],

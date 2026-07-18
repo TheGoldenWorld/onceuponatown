@@ -161,7 +161,7 @@ public class TickScheduler {
         int residents = town.getActiveResidents();
         if (residents < prereqs.minResidents() || residents > prereqs.maxResidents()) return false;
         if (!prereqs.requiredOrientations().isEmpty()) {
-            String orientation = town.getOrDeriveOrientation();
+            String orientation = town.getCurrentOrientation();
             if (prereqs.requiredOrientations().stream().noneMatch(o -> o.equals(orientation))) return false;
         }
         for (String defId : prereqs.requiredBuildings()) {

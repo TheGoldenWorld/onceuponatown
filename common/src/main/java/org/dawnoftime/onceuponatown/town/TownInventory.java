@@ -35,7 +35,9 @@ public class TownInventory {
                 if (def == null) return 0;
                 return def.production.stream()
                     .filter(p -> p.item() == item)
-                    .mapToInt(p -> (p.capacityStacks() + townStockBonus) * 64)
+                    .mapToInt(p -> p.capacityUnits() >= 0
+                        ? p.capacityUnits()
+                        : (p.capacityStacks() + townStockBonus) * 64)
                     .sum();
             })
             .sum();

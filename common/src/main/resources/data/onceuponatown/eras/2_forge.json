@@ -6,6 +6,7 @@
   "icon_item": "minecraft:anvil",
 
   "weight_cap_increase": 10,
+  "max_upgrade_level": 2,
 
   "resource_cost": [
     { "item": "minecraft:oak_log", "amount": 42 },
@@ -17,7 +18,7 @@
     { "defId": "wild_stone", "count": 2 }
   ],
 
-  "auto_build_sequence": ["stone_breach", "lumberjack", "oven", "house_3"],
+  "auto_build_sequence": [{"defId": "grove", "count": 2}, "stone_breach", "oven", "lumberjack"],
 
   "unlocked_building_ids": ["lone_place", "carpenter"],
   "unlock_npc_counts": { "builder": 1 },

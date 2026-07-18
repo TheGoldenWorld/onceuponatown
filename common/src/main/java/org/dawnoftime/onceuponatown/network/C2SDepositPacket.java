@@ -48,15 +48,17 @@ public record C2SDepositPacket(BlockPos anchorPos) {
                 Item item = stack.getItem();
                 if (!productionItems.contains(item)) continue;
 
-                changed = true;
-                int count = stack.getCount();
+                int count    = stack.getCount();
+                int accepted = town.tryAddToStockUnchecked(item, count);
+                if (accepted <= 0) continue;
 
+                changed = true;
                 int sellPrice = TradePriceDataHandler.getSellPrice(item);
                 int quantity  = TradePriceDataHandler.getQuantity(item);
-                if (sellPrice > 0) totalEmeralds += sellPrice * (count / quantity);
+                if (sellPrice > 0) totalEmeralds += sellPrice * (accepted / quantity);
 
-                town.tryAddToStockUnchecked(item, count);
-                deposit.setItem(i, ItemStack.EMPTY);
+                int rejected = count - accepted;
+                deposit.setItem(i, rejected > 0 ? new ItemStack(item, rejected) : ItemStack.EMPTY);
             }
 
             if (changed) {

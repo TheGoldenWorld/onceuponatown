@@ -17,10 +17,12 @@ public class EraDef {
     public final int initialMaxWeight;
     // Production multiplier stamped on boosted buildings at placement time (default 1.0 = no bonus)
     public final double boostMultiplier;
+    // Upgrade ceiling active from era 0 -- buildings cannot exceed this level until a transition raises it
+    public final int initialMaxUpgradeLevel;
 
     public EraDef(int era, String orientation, String orientationLabel, String structureLabel,
                   String iconItem, String starterBuildingId, List<String> boostedBuildings,
-                  int initialMaxWeight, double boostMultiplier) {
+                  int initialMaxWeight, double boostMultiplier, int initialMaxUpgradeLevel) {
         this.era = era;
         this.orientation = orientation;
         this.orientationLabel = orientationLabel;
@@ -30,5 +32,6 @@ public class EraDef {
         this.boostedBuildings = boostedBuildings;
         this.initialMaxWeight = initialMaxWeight;
         this.boostMultiplier = boostMultiplier;
+        this.initialMaxUpgradeLevel = initialMaxUpgradeLevel;
     }
 }

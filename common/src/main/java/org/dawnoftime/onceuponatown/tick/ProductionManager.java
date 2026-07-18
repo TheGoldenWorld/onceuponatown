@@ -67,7 +67,9 @@ public class ProductionManager {
                 if (gameTime % effectiveTicks != 0) continue;
                 double totalMultiplier = bonusMultiplier * building.getInstanceProductionMultiplier();
                 int boostedAmount = (int) Math.round(entry.amount() * totalMultiplier);
-                int resolvedCapacity = (entry.capacityStacks() + townStockBonus) * 64;
+                int resolvedCapacity = entry.capacityUnits() >= 0
+                    ? entry.capacityUnits()
+                    : (entry.capacityStacks() + townStockBonus) * 64;
                 if (building.produce(entry.item(), boostedAmount, resolvedCapacity)) changed = true;
             }
 

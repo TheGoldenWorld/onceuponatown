@@ -39,7 +39,7 @@ public record C2SSelectEraPathPacket(BlockPos anchorPos, String pathId) {
             if (!oldId.equals(packet.pathId())) {
                 // Player switched path -- cancel locked queue entries that belong to the old sequence.
                 EraTransitionDef newDef = EraTransitionDataHandler.get(packet.pathId()).orElse(null);
-                List<String> newSeq = newDef != null ? newDef.autoBuildSequence : List.of();
+                List<EraTransitionDef.AutoBuildEntry> newSeq = newDef != null ? newDef.autoBuildSequence : List.of();
                 town.cancelOrphanedLockedEntries(newSeq);
             }
             town.setAutonomyChosenTransitionId(packet.pathId());

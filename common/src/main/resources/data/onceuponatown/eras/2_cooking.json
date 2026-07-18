@@ -6,6 +6,7 @@
   "icon_item": "minecraft:smoker",
 
   "weight_cap_increase": 10,
+  "max_upgrade_level": 2,
 
   "resource_cost": [
     { "item": "minecraft:oak_log", "amount": 42 },
@@ -17,7 +18,7 @@
     { "defId": "oven", "count": 1 }
   ],
 
-  "auto_build_sequence": ["oven", "lumberjack", "bee_field", "bee_field", "house_3"],
+  "auto_build_sequence": [{"defId": "grove", "count": 2}, "oven", {"defId": "bee_tree", "count": 2}, "lumberjack"],
 
   "unlocked_building_ids": ["lone_place", "carpenter", "bee_field", "kitchen"],
   "unlock_npc_counts": { "builder": 1 },

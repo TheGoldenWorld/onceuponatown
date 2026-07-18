@@ -15,13 +15,14 @@ public sealed interface QueueEntry permits QueueEntry.NewBuild, QueueEntry.Upgra
     boolean locked();
 
     /** A new building to construct from a connection point. */
-    record NewBuild(long entryId, String defId, boolean locked) implements QueueEntry {}
+    record NewBuild(long entryId, String defId, boolean locked, boolean planned, boolean residentTrack) implements QueueEntry {}
 
     /**
      * An upgrade task for a building already placed in the world.
      * fromLevel is the building's upgrade level when this task was enqueued.
+     * planned=true means no stock is reserved yet; builder skips it until EraManager promotes it.
      */
-    record Upgrade(long entryId, String defId, BlockPos buildingWorldPos, int fromLevel, boolean locked) implements QueueEntry {}
+    record Upgrade(long entryId, String defId, BlockPos buildingWorldPos, int fromLevel, boolean locked, boolean planned) implements QueueEntry {}
 
     static CompoundTag serialize(QueueEntry entry) {
         CompoundTag tag = new CompoundTag();
@@ -32,9 +33,12 @@ public sealed interface QueueEntry permits QueueEntry.NewBuild, QueueEntry.Upgra
             tag.putString("DefId", u.defId());
             tag.putLong("BuildingWorldPos", u.buildingWorldPos().asLong());
             tag.putInt("FromLevel", u.fromLevel());
+            tag.putBoolean("Planned", u.planned());
         } else if (entry instanceof NewBuild nb) {
             tag.putString("Type", "new_build");
             tag.putString("DefId", nb.defId());
+            tag.putBoolean("Planned", nb.planned());
+            tag.putBoolean("ResidentTrack", nb.residentTrack());
         }
         return tag;
     }
@@ -44,8 +48,11 @@ public sealed interface QueueEntry permits QueueEntry.NewBuild, QueueEntry.Upgra
         String defId = tag.getString("DefId");
         boolean locked = tag.contains("Locked") && tag.getBoolean("Locked");
         if ("upgrade".equals(tag.getString("Type"))) {
-            return new Upgrade(entryId, defId, BlockPos.of(tag.getLong("BuildingWorldPos")), tag.getInt("FromLevel"), locked);
+            boolean planned = tag.contains("Planned") && tag.getBoolean("Planned");
+            return new Upgrade(entryId, defId, BlockPos.of(tag.getLong("BuildingWorldPos")), tag.getInt("FromLevel"), locked, planned);
         }
-        return new NewBuild(entryId, defId, locked);
+        boolean planned       = tag.contains("Planned")       && tag.getBoolean("Planned");
+        boolean residentTrack = tag.contains("ResidentTrack") && tag.getBoolean("ResidentTrack");
+        return new NewBuild(entryId, defId, locked, planned, residentTrack);
     }
 }

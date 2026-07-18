@@ -1,0 +1,9 @@
+{
+  "era": 0,
+  "orientation": "ouatej",
+  "orientation_label": "Agricultural",
+  "structure_label": "Settlement",
+  "icon_item": "minecraft:wheat",
+  "starter_building_id": "town_hall",
+  "initial_max_weight": 20
+}

@@ -30,7 +30,12 @@ public class EraTransitionDef {
     // Building defIds to auto-upgrade (free) when this transition completes. Default: empty list.
     public final List<String> autoUpgradeIds;
     // Ordered list of building defIds the autonomy system will queue to meet this transition's requirements.
-    public final List<String> autoBuildSequence;
+    public final List<AutoBuildEntry> autoBuildSequence;
+    // After this transition the upgrade ceiling becomes max(current, maxUpgradeLevel). 0 = no change.
+    public final int maxUpgradeLevel;
+
+    // An entry in autoBuildSequence. count = total desired placements of defId when this position is reached.
+    public record AutoBuildEntry(String defId, int count) {}
 
     public EraTransitionDef(String id, int fromEra, String fromOrientation, String orientationLabel,
                             String iconItem, List<ItemCost> resourceCost,
@@ -38,7 +43,7 @@ public class EraTransitionDef {
                             List<String> unlockedBuildingIds, String nextOrientation,
                             int weightCapIncrease, String structureLabel,
                             Map<String, Integer> unlockNpcCounts, List<String> autoUpgradeIds,
-                            List<String> autoBuildSequence) {
+                            List<AutoBuildEntry> autoBuildSequence, int maxUpgradeLevel) {
         this.id = id;
         this.fromEra = fromEra;
         this.fromOrientation = fromOrientation;
@@ -54,5 +59,6 @@ public class EraTransitionDef {
         this.unlockNpcCounts = unlockNpcCounts;
         this.autoUpgradeIds = autoUpgradeIds;
         this.autoBuildSequence = autoBuildSequence;
+        this.maxUpgradeLevel = maxUpgradeLevel;
     }
 }

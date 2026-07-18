@@ -1,0 +1,14 @@
+{
+    "id":  "street3w",
+    "nbt":  "ouatej:ouatej/streets/street3w",
+    "entry_pool":  "ouatej:streets",
+    "terrain_matching":  true,
+    "icon_item":  "minecraft:dirt_path",
+    "footprint":  [
+                      "11111",
+                      "11111",
+                      "11111",
+                      "01110"
+                  ],
+    "weight":  0
+}

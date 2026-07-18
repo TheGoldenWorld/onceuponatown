@@ -15,7 +15,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.phys.Vec3;
 import org.dawnoftime.onceuponatown.building.schematic.BlockStep;
-import org.dawnoftime.onceuponatown.building.schematic.BuildSchematic;
+import org.dawnoftime.onceuponatown.building.schematic.SchematicBounds;
 import org.dawnoftime.onceuponatown.building.schematic.EntityStep;
 import org.dawnoftime.onceuponatown.building.schematic.PlacementStep;
 import org.dawnoftime.onceuponatown.datapack.BuilderConfigDataHandler;
@@ -257,7 +257,7 @@ public class BuildGoal implements BuildTask {
         action.skipInitialReading = true;
 
         // addUnderConstruction is called here -- Town.fromNbt() is static with no ServerLevel.
-        BuildSchematic.computeBoundingBox(level, state.placementPos(), def.nbt, state.rotation())
+        SchematicBounds.computeBoundingBox(level, state.placementPos(), def.nbt, state.rotation())
             .ifPresent(bb -> town.addUnderConstruction(def.id, state.placementPos(), bb, state.rotation()));
 
         return new BuildGoal(npc, action);

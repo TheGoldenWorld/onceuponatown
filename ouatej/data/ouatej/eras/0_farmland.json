@@ -1,0 +1,9 @@
+{
+  "era": 0,
+  "orientation": "farmland",
+  "orientation_label": "Agricultural",
+  "structure_label": "Settlement",
+  "icon_item": "minecraft:wheat",
+  "starter_building_id": "farmland_v1",
+  "initial_max_weight": 20
+}

@@ -10,4 +10,8 @@ public class Constants {
 	public static final Logger LOG = LoggerFactory.getLogger(MOD_NAME);
 
 	public static final String STREETS_POOL = MOD_ID + ":streets";
+
+	public static boolean isStreetsPool(String poolName) {
+		return poolName != null && poolName.endsWith(":streets");
+	}
 }

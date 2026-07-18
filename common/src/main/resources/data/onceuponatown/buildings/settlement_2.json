@@ -37,6 +37,48 @@
       "every_ticks": 1800,
       "capacity_stacks": 1,
       "unlock_at_level": 1
+    },
+    {
+      "item": "minecraft:white_wool",
+      "amount": 1,
+      "every_ticks": 2100,
+      "capacity_stacks": 1,
+      "unlock_at_level": 1
+    },
+    {
+      "item": "minecraft:beef",
+      "amount": 1,
+      "every_ticks": 1800,
+      "capacity_stacks": 1,
+      "unlock_at_level": 2
+    },
+    {
+      "item": "minecraft:leather",
+      "amount": 1,
+      "every_ticks": 2400,
+      "capacity_stacks": 1,
+      "unlock_at_level": 2
+    },
+    {
+      "item": "minecraft:chicken",
+      "amount": 1,
+      "every_ticks": 1800,
+      "capacity_stacks": 1,
+      "unlock_at_level": 4
+    },
+    {
+      "item": "minecraft:egg",
+      "amount": 1,
+      "every_ticks": 1800,
+      "capacity_stacks": 1,
+      "unlock_at_level": 4
+    },
+    {
+      "item": "minecraft:feather",
+      "amount": 1,
+      "every_ticks": 2000,
+      "capacity_stacks": 1,
+      "unlock_at_level": 4
     }
   ],
   "transform_input_ratio": 0.1,
@@ -61,24 +103,49 @@
       "output_amount": 3,
       "output_capacity_stacks": 1,
       "unlock_at_level": 1
+    },
+    {
+      "inputs": [
+        { "item": "minecraft:beef", "amount": 3 },
+        { "item": "minecraft:charcoal", "amount": 1 }
+      ],
+      "output": "minecraft:cooked_beef",
+      "output_amount": 3,
+      "output_capacity_stacks": 1,
+      "unlock_at_level": 2
+    },
+    {
+      "inputs": [
+        { "item": "minecraft:chicken", "amount": 3 },
+        { "item": "minecraft:charcoal", "amount": 1 }
+      ],
+      "output": "minecraft:cooked_chicken",
+      "output_amount": 3,
+      "output_capacity_stacks": 1,
+      "unlock_at_level": 4
     }
   ],
   "upgrades": [
     {
       "herd_add": 2,
       "consumption_per_herd_add": 2.0,
-      "amount_add": 1,
-      "unlocks_display": ["minecraft:cooked_porkchop", "minecraft:mutton", "minecraft:cooked_mutton"],
+      "unlocks_display": ["minecraft:cooked_porkchop", "minecraft:mutton", "minecraft:cooked_mutton", "white_wool"],
       "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 0 }]
     },
     {
-      "capacity_stacks_add": 1,
+      "herd_add": 2,
+      "consumption_per_herd_add": 2.0,
+      "unlocks_display": ["minecraft:beef", "minecraft:cooked_beef", "minecraft:leather"],
       "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 20 }]
     },
     {
+      "herd_add": 1,
+      "consumption_per_herd_add": 1.0,
       "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 40 }]
     },
     {
+      "herd_add": 2,
+      "consumption_per_herd_add": 2.0,
       "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 60 }]
     },
     {
@@ -95,6 +162,5 @@
     "onceuponatown:plains/starters/settlement_2_lvl4",
     "onceuponatown:plains/starters/settlement_2_lvl5",
     "onceuponatown:plains/starters/settlement_2_lvl6"
-
   ]
 }
