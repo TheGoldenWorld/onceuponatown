@@ -1,0 +1,96 @@
+{
+  "id": "fisherman",
+  "nbt": "onceuponatown:plains/jobs/fisherman",
+  "entry_pool": "onceuponatown:jobs",
+  "icon_item": "minecraft:cod",
+  "category": "jobs",
+  "weight": 3,
+
+  "required_buildings": [
+    { "defId": "lake", "count": 2 }
+  ],
+  "construction_cost": [
+    {
+      "item": "minecraft:oak_log",
+      "amount": 35
+    },
+    {
+      "item": "minecraft:cobblestone",
+      "amount": 5
+    }
+  ],
+  "production": [
+    {
+      "item": "minecraft:cod",
+      "amount": 1,
+      "every_ticks": 2100,
+      "capacity_stacks": 1
+    },
+    {
+      "item": "minecraft:salmon",
+      "amount": 1,
+      "every_ticks": 2100,
+      "capacity_stacks": 1,
+      "unlock_at_level": 1
+    }
+  ],
+  "transform_input_ratio": 0.1,
+  "transform_every_ticks": 1600,
+  "transformations": [
+    {
+      "inputs": [
+        { "item": "minecraft:cod", "amount": 3 },
+        { "item": "minecraft:charcoal", "amount": 1 }
+      ],
+      "output": "minecraft:cooked_cod",
+      "output_amount": 3,
+      "output_capacity_stacks": 1,
+      "unlock_at_level": 1
+    },
+    {
+      "inputs": [
+        { "item": "minecraft:salmon", "amount": 3 },
+        { "item": "minecraft:charcoal", "amount": 1 }
+      ],
+      "output": "minecraft:cooked_salmon",
+      "output_amount": 3,
+      "output_capacity_stacks": 1,
+      "unlock_at_level": 1
+    }
+  ],
+  "upgrades": [
+    {
+      "capacity_stacks_add": 1,
+      "unlocks_display": ["minecraft:salmon"],
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 20 }]
+    },
+    {
+      "amount_add": 1,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 30 }]
+    },
+    {
+      "capacity_stacks_add": 1,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 40 }]
+    },
+    {
+      "cadence_multiplier": 0.10,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 60 }]
+    },
+    {
+      "amount_add": 1,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 80 }]
+    },
+    {
+      "cadence_multiplier": 0.20,
+      "upgrade_cost": [{ "item": "minecraft:oak_log", "amount": 100 }]
+    }
+  ],
+  "nbt_levels": [
+    "onceuponatown:plains/jobs/fisherman_lvl1",
+    "onceuponatown:plains/jobs/fisherman_lvl2",
+    "onceuponatown:plains/jobs/fisherman_lvl3",
+    "onceuponatown:plains/jobs/fisherman_lvl4",
+    "onceuponatown:plains/jobs/fisherman_lvl5",
+    "onceuponatown:plains/jobs/fisherman_lvl6"
+  ]
+}

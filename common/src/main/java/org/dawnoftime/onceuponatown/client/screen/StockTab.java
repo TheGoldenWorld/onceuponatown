@@ -22,6 +22,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+// Scroll zone: x=leftPos+151, y=topPos+17, 18x72 px. Slider travels 57 px (72-15).
+// Slider UV: enabled=41, disabled=58 at U=177 in town_hub.png.
+
 class StockTab {
 
     private static final ResourceLocation TEXTURE =
@@ -31,6 +34,12 @@ class StockTab {
     private final Map<String, int[]> tradePrices = new HashMap<>();
     private final LinkedHashMap<Item, Integer> buyRequest = new LinkedHashMap<>();
 
+    private final List<ItemStack> allStockItems = new ArrayList<>();
+    private int scrollOffset = 0;
+    private boolean isDraggingSlider = false;
+    private float dragAnchorScreenY = 0;
+    private float dragAnchorSliderY = 0;
+
     void parseTradePrices(CompoundTag hub) {
         tradePrices.clear();
         if (!hub.contains("TradePrices")) return;
@@ -39,6 +48,67 @@ class StockTab {
             CompoundTag priceEntry = pricesTag.getCompound(itemId);
             tradePrices.put(itemId, new int[]{ priceEntry.getInt("buy"), priceEntry.getInt("sell"), Math.max(1, priceEntry.getInt("quantity")) });
         }
+    }
+
+    void applyStockData(CompoundTag stockTag, TownHubMenu menu) {
+        buildAllStockItems(stockTag);
+        menu.loadVisibleWindow(allStockItems, scrollOffset);
+    }
+
+    private void buildAllStockItems(CompoundTag stockTag) {
+        allStockItems.clear();
+        for (String itemId : stockTag.getAllKeys()) {
+            int count = stockTag.getInt(itemId);
+            if (count <= 0) continue;
+            ResourceLocation rl = ResourceLocation.tryParse(itemId);
+            if (rl == null) continue;
+            Item item = BuiltInRegistries.ITEM.get(rl);
+            if (item == null || item == Items.AIR) continue;
+            int remaining = count;
+            while (remaining > 0) {
+                int stackSize = Math.min(remaining, item.getMaxStackSize());
+                allStockItems.add(new ItemStack(item, stackSize));
+                remaining -= stackSize;
+            }
+        }
+        scrollOffset = Math.max(0, Math.min(scrollOffset, computeMaxScroll()));
+    }
+
+    private int computeMaxScroll() {
+        int totalRows = (int) Math.ceil((double) allStockItems.size() / TownHubMenu.COLS);
+        return Math.max(0, totalRows - TownHubMenu.ROWS);
+    }
+
+    private int computeSliderY() {
+        int max = computeMaxScroll();
+        if (max <= 0) return 0;
+        return Math.round((float) scrollOffset / max * 55);
+    }
+
+    boolean handleDrag(double mY, TownHubMenu menu) {
+        if (!isDraggingSlider) return false;
+        int max = computeMaxScroll();
+        if (max <= 0) { isDraggingSlider = false; return false; }
+        float delta = (float) (mY - dragAnchorScreenY);
+        float newSliderY = dragAnchorSliderY + delta;
+        scrollOffset = Math.round(newSliderY / 55f * max);
+        scrollOffset = Math.max(0, Math.min(scrollOffset, max));
+        menu.loadVisibleWindow(allStockItems, scrollOffset);
+        return true;
+    }
+
+    boolean handleRelease() {
+        if (isDraggingSlider) { isDraggingSlider = false; return true; }
+        return false;
+    }
+
+    boolean handleScroll(double delta, TownHubMenu menu) {
+        int max = computeMaxScroll();
+        if (max <= 0) return false;
+        scrollOffset -= (int) Math.signum(delta);
+        scrollOffset = Math.max(0, Math.min(scrollOffset, max));
+        menu.loadVisibleWindow(allStockItems, scrollOffset);
+        return true;
     }
 
     void render(GuiGraphics g, int leftPos, int topPos, int mx, int my,
@@ -55,6 +125,21 @@ class StockTab {
         g.blit(TEXTURE, toggleX, toggleY, 177, arrowV, 18, 18);
         boolean arrowHover = mx >= toggleX && mx < toggleX + 18 && my >= toggleY && my < toggleY + 18;
         if (arrowHover) g.fill(toggleX, toggleY, toggleX + 18, toggleY + 18, 0x30FFFFFF);
+
+        // Scroll zone
+        int scrollZoneX = leftPos + 151;
+        int scrollZoneY = topPos + 17;
+        boolean canScroll = computeMaxScroll() > 0;
+        int sliderV = canScroll ? 41 : 58;
+        int sliderScreenX = scrollZoneX + 1;
+        int sliderScreenY = scrollZoneY + 1 + computeSliderY();
+        g.blit(TEXTURE, sliderScreenX, sliderScreenY, 177, sliderV, 16, 15);
+        if (canScroll) {
+            boolean hover = mx >= sliderScreenX && mx < sliderScreenX + 16
+                         && my >= sliderScreenY && my < sliderScreenY + 15;
+            if (hover || isDraggingSlider) g.fill(sliderScreenX, sliderScreenY,
+                sliderScreenX + 16, sliderScreenY + 15, 0x30FFFFFF);
+        }
 
         if (buyMode) {
             List<Map.Entry<Item, Integer>> slots = expandBuySlots();
@@ -110,8 +195,13 @@ class StockTab {
 
         boolean toggleBtnHover = mx >= confirmX && mx < confirmX + 18 && my >= confirmY && my < confirmY + 18;
         g.fill(confirmX, confirmY, confirmX + 18, confirmY + 18, toggleBtnHover ? 0xFF555555 : 0xFF333333);
-        String modeLabel = buyMode ? "B" : "S";
-        g.drawCenteredString(ctx.font(), modeLabel, confirmX + 9, confirmY + 5, 0xFFFFFFFF);
+        String modeLabel = buyMode ? "BUY" : "SELL";
+        float labelScale = 0.75f;
+        g.pose().pushPose();
+        g.pose().translate(confirmX + 9, confirmY + 9, 0);
+        g.pose().scale(labelScale, labelScale, 1.0f);
+        g.drawCenteredString(ctx.font(), modeLabel, 0, -4, 0xFFFFFFFF);
+        g.pose().popPose();
     }
 
     // Returns true if the trade-price tooltip was rendered (caller skips super.renderTooltip).
@@ -173,11 +263,47 @@ class StockTab {
         return true;
     }
 
+    boolean isArrowHovered(int mx, int my, int leftPos, int topPos) {
+        int toggleX = leftPos + 151;
+        int toggleY = topPos + 89;
+        return mx >= toggleX && mx < toggleX + 18 && my >= toggleY && my < toggleY + 18;
+    }
+
+    boolean isModeToggleHovered(int mx, int my, int leftPos, int topPos) {
+        int toggleX = leftPos + 151;
+        int toggleY = topPos + 107;
+        return mx >= toggleX && mx < toggleX + 18 && my >= toggleY && my < toggleY + 18;
+    }
+
+    boolean isBuyMode() { return buyMode; }
+
     // Handles all tab-0 clicks. Returns true if the click was consumed.
     boolean handleClick(double mX, double mY, int button,
                         int leftPos, int topPos,
                         TownHubTypes.TownHubTabContext ctx, TownHubMenu menu) {
         if (button == 0) {
+            int scrollZoneX = leftPos + 151;
+            int scrollZoneY = topPos + 17;
+            if (computeMaxScroll() > 0) {
+                int sliderY  = computeSliderY();
+                int sliderSX = scrollZoneX + 1;
+                int sliderSY = scrollZoneY + 1 + sliderY;
+                if (mX >= sliderSX && mX < sliderSX + 16 && mY >= sliderSY && mY < sliderSY + 15) {
+                    isDraggingSlider  = true;
+                    dragAnchorScreenY = (float) mY;
+                    dragAnchorSliderY = sliderY;
+                    return true;
+                }
+                if (mX >= scrollZoneX && mX < scrollZoneX + 18
+                        && mY >= scrollZoneY && mY < scrollZoneY + 72) {
+                    float ratio = ((float) mY - scrollZoneY - 1) / 55f;
+                    scrollOffset = Math.round(ratio * computeMaxScroll());
+                    scrollOffset = Math.max(0, Math.min(scrollOffset, computeMaxScroll()));
+                    menu.loadVisibleWindow(allStockItems, scrollOffset);
+                    return true;
+                }
+            }
+
             int toggleX = leftPos + 151;
             int toggleY = topPos + 107;
             if (mX >= toggleX && mX < toggleX + 18 && mY >= toggleY && mY < toggleY + 18) {

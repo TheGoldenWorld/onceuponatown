@@ -159,7 +159,7 @@ public class ChunkGeneratorMixin {
                     obstacles = found;
                 }
 
-                town.registerBuilding(entry.origin(), entry.defId(), free, entry.pieceBb(), entry.rotation(), obstacles);
+                town.registerBuilding(entry.origin(), entry.defId(), free, entry.pieceBb(), entry.rotation(), obstacles, null);
             }
 
             // Pass 3: pieces with no building def (vanilla pieces, unrecognized jigsaw elements) are not

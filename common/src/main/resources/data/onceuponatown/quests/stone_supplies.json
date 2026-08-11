@@ -17,5 +17,8 @@
   "conditions": [
     { "type": "DELIVERY", "item": "minecraft:cobblestone", "required": 10, "send_to_stock": true }
   ],
-  "reward": { "type": "PLAYER", "item": "minecraft:emerald", "amount": 2 }
+  "rewards": [
+    { "type": "PLAYER", "item": "minecraft:emerald", "amount": 2 },
+    { "type": "XP", "amount": 30 }
+  ]
 }

@@ -28,6 +28,7 @@
     { "item": "minecraft:tuff",               "buy": 3, "sell": 2, "quantity": 25 },
 
     { "item": "minecraft:oak_sapling",        "buy": 2, "sell": 1, "quantity": 45 },
+    { "item": "minecraft:feather",            "buy": 3, "sell": 2, "quantity": 15 },
 
     { "item": "minecraft:wheat_seeds",        "buy": 2, "sell": 1, "quantity": 45 },
     { "item": "minecraft:wheat",              "buy": 2, "sell": 1, "quantity": 25 },
@@ -38,18 +39,23 @@
     { "item": "minecraft:potato",             "buy": 2, "sell": 1, "quantity": 25 },
     { "item": "minecraft:baked_potato",       "buy": 3, "sell": 2, "quantity": 15 },
 
+    { "item": "minecraft:cod",                "buy": 2, "sell": 1, "quantity": 15 },
     { "item": "minecraft:porkchop",           "buy": 2, "sell": 1, "quantity": 15 },
     { "item": "minecraft:cooked_porkchop",    "buy": 3, "sell": 2, "quantity": 10 },
     { "item": "minecraft:mutton",             "buy": 2, "sell": 1, "quantity": 15 },
     { "item": "minecraft:cooked_mutton",      "buy": 3, "sell": 2, "quantity": 10 },
     { "item": "minecraft:beef",               "buy": 2, "sell": 1, "quantity": 15 },
     { "item": "minecraft:cooked_beef",        "buy": 3, "sell": 2, "quantity": 10 },
+    { "item": "minecraft:chicken",            "buy": 2, "sell": 1, "quantity": 15 },
+    { "item": "minecraft:cooked_chicken",     "buy": 3, "sell": 2, "quantity": 10 },
+    { "item": "minecraft:egg",                "buy": 4, "sell": 3, "quantity": 16  },
 
-    { "item": "minecraft:leather",            "buy": 5, "sell": 3, "quantity": 8  },
-    { "item": "minecraft:honeycomb",          "buy": 5, "sell": 3, "quantity": 8  },
+
+
     { "item": "minecraft:white_wool",         "buy": 5, "sell": 3, "quantity": 10 },
-    { "item": "minecraft:item_frame",         "buy": 5, "sell": 3, "quantity": 5  },
-    { "item": "minecraft:item_frame",         "buy": 4, "sell": 2, "quantity": 1  }
-
+    { "item": "minecraft:white_bed",          "buy": 3, "sell": 2, "quantity": 1 },
+    { "item": "minecraft:honeycomb",          "buy": 5, "sell": 3, "quantity": 8  },
+    { "item": "minecraft:leather",            "buy": 5, "sell": 3, "quantity": 8  },
+    { "item": "minecraft:item_frame",         "buy": 5, "sell": 3, "quantity": 5  }
   ]
 }

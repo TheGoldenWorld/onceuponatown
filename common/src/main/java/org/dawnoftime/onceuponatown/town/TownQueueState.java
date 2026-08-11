@@ -162,6 +162,20 @@ public class TownQueueState {
             .anyMatch(e -> e instanceof QueueEntry.Upgrade u && u.locked() && !u.planned());
     }
 
+    // Count of real (non-planned) locked autonomous Upgrade entries currently in the queue.
+    public int countRealAutonomousUpgradeEntries() {
+        return (int) constructionQueue.stream()
+            .filter(e -> e instanceof QueueEntry.Upgrade u && u.locked() && !u.planned())
+            .count();
+    }
+
+    // Count of planned locked autonomous Upgrade entries currently waiting for stock.
+    public int countPlannedAutonomousUpgradeEntries() {
+        return (int) constructionQueue.stream()
+            .filter(e -> e instanceof QueueEntry.Upgrade u && u.locked() && u.planned())
+            .count();
+    }
+
     // Promotes the planned autonomous upgrade to a real entry (stock reserved by caller).
     // Preserves queue position.
     public boolean promoteAutonomousUpgradeEntry() {
@@ -293,6 +307,7 @@ public class TownQueueState {
         tag.put("Cost", costTag);
         if (s.queueDefId() != null) tag.putString("QueueDefId", s.queueDefId());
         if (s.queueEntryId() >= 0) tag.putLong("QueueEntryId", s.queueEntryId());
+        tag.putInt("FromLevel", s.fromLevel());
         return tag;
     }
 
@@ -319,7 +334,8 @@ public class TownQueueState {
         }
         String queueDefId = tag.contains("QueueDefId") ? tag.getString("QueueDefId") : null;
         long queueEntryId = tag.contains("QueueEntryId") ? tag.getLong("QueueEntryId") : -1L;
+        int fromLevel = tag.contains("FromLevel") ? tag.getInt("FromLevel") : -1;
         return new ActiveBuildState(defId, placementPos, rotation, connectionPos, connectionDir,
-            connectionTarget, entryConnectorPos, cost, queueDefId, queueEntryId);
+            connectionTarget, entryConnectorPos, cost, queueDefId, queueEntryId, fromLevel);
     }
 }

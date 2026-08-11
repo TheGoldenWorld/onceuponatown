@@ -2,11 +2,14 @@ package org.dawnoftime.onceuponatown.building.schematic;
 
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.Set;
 
 public final class SchematicConstants {
@@ -47,14 +50,24 @@ public final class SchematicConstants {
     }
 
     // Priority table for blocks deferred until after the main build loop.
-    // Lower value = placed first. Water must precede lily pads (lily pads require a water source beneath them).
-    // To support a new block: add one entry here with the desired placement order.
-    // V2 note: this map is intended to become data-driven via block tags (onceuponatown:deferred_tier_N).
-    public static final Map<Block, Integer> DEFERRED_PLACEMENT_PRIORITY;
+    // Order: waterlogged blocks (0) -> water (1) -> lily pads (2).
+    // Waterlogged blocks must be placed before water so the block occupies the space first;
+    // water fills the cell after, and lily pads float on top last.
+    private static final Map<Block, Integer> DEFERRED_PLACEMENT_PRIORITY;
     static {
         Map<Block, Integer> m = new HashMap<>();
-        m.put(Blocks.WATER, 0);
-        m.put(Blocks.LILY_PAD, 1);
+        m.put(Blocks.WATER, 1);
+        m.put(Blocks.LILY_PAD, 2);
         DEFERRED_PLACEMENT_PRIORITY = Collections.unmodifiableMap(m);
+    }
+
+    // Returns the deferred placement priority for a block state, or empty if the block should not be deferred.
+    // Waterlogged states get priority 0 (before water), specific blocks use the priority table.
+    public static OptionalInt getDeferredPriority(BlockState state) {
+        if (state.hasProperty(BlockStateProperties.WATERLOGGED) && state.getValue(BlockStateProperties.WATERLOGGED)) {
+            return OptionalInt.of(0);
+        }
+        Integer p = DEFERRED_PLACEMENT_PRIORITY.get(state.getBlock());
+        return p != null ? OptionalInt.of(p) : OptionalInt.empty();
     }
 }

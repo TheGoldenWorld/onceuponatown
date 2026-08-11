@@ -75,11 +75,15 @@ public record C2SContributeQuestPacket(BlockPos anchorPos, String questId) {
                 }
             }
 
-            // Give reward directly to player inventory, drop if full
-            if (quest.reward != null && "PLAYER".equals(quest.reward.type) && quest.reward.item != null) {
-                ItemStack rewardStack = new ItemStack(quest.reward.item, quest.reward.amount);
-                if (!player.getInventory().add(rewardStack)) {
-                    player.drop(rewardStack, false);
+            // Give all rewards
+            for (Quest.Reward reward : quest.rewards) {
+                if ("PLAYER".equals(reward.type) && reward.item != null) {
+                    ItemStack rewardStack = new ItemStack(reward.item, reward.amount);
+                    if (!player.getInventory().add(rewardStack)) {
+                        player.drop(rewardStack, false);
+                    }
+                } else if ("XP".equals(reward.type)) {
+                    player.giveExperiencePoints(reward.amount);
                 }
             }
 

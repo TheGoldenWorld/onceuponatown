@@ -16,5 +16,6 @@ public record ActiveBuildState(
     BlockPos entryConnectorPos,
     List<ItemCost> cost,
     String queueDefId,
-    long queueEntryId
+    long queueEntryId,
+    int fromLevel  // -1 for NewBuild, >= 0 for Upgrade (the level being upgraded from)
 ) {}

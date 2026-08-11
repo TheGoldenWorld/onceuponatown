@@ -1,19 +1,11 @@
 package org.dawnoftime.onceuponatown.entity.ai.builder;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.ai.util.DefaultRandomPos;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.BedBlock;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
-import net.minecraft.world.level.block.state.properties.BedPart;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import org.dawnoftime.onceuponatown.Constants;
@@ -24,11 +16,10 @@ import org.dawnoftime.onceuponatown.building.schematic.JigsawConnector;
 import org.dawnoftime.onceuponatown.datapack.BuilderConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuildingDataHandler;
 import org.dawnoftime.onceuponatown.entity.Npc;
-import org.dawnoftime.onceuponatown.entity.ai.ActivityDef;
-import org.dawnoftime.onceuponatown.entity.ai.AnimationType;
-import org.dawnoftime.onceuponatown.entity.ai.NpcJob;
+import org.dawnoftime.onceuponatown.entity.ai.AbstractNpcJob;
 import org.dawnoftime.onceuponatown.entity.ai.shared.ConnectionPointYResolver;
-import org.dawnoftime.onceuponatown.entity.ai.shared.GoToPosition;
+import org.dawnoftime.onceuponatown.entity.ai.shared.NpcSleepController;
+import org.dawnoftime.onceuponatown.entity.ai.shared.SecondaryActivityController;
 import org.dawnoftime.onceuponatown.network.NetworkHelper;
 import org.dawnoftime.onceuponatown.town.ActiveBuildState;
 import org.dawnoftime.onceuponatown.town.BuildingDef;
@@ -48,16 +39,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-public class BuilderJob implements NpcJob {
+public class BuilderJob extends AbstractNpcJob {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BuilderJob.class);
 
     public enum State { IDLE, BUILD, ACTIVITY, SLEEPING }
 
-    private final Npc npc;
     private State current = State.IDLE;
-    private ActivityInstance currentActivity = null;
-    private int activityPerformTicks = 0;
+    private final SecondaryActivityController activityController = new SecondaryActivityController();
     private int queueCursor = 0;
     private BuildTask activeBuild = null;
     // The player-queued entry currently being built, or null if not building from queue.
@@ -65,10 +54,6 @@ public class BuilderJob implements NpcJob {
     // DefIds that have already received a suppressed skip message this session.
     // Cleared when the defId is placed or falls out of the queue.
     private final Set<String> warnedDefIds = new HashSet<>();
-
-    // Sleep state fields -- reset to null whenever SLEEPING is exited.
-    private BlockPos sleepBedPos = null;
-    private GoToPosition sleepGoTo = null;
 
     private enum QueueScanResult { STARTED_BUILD, BLOCKED, ALL_CLAIMED, EMPTY }
 
@@ -95,7 +80,7 @@ public class BuilderJob implements NpcJob {
     }
 
     public BuilderJob(Npc npc) {
-        this.npc = npc;
+        super(npc);
     }
 
     @Override
@@ -110,22 +95,9 @@ public class BuilderJob implements NpcJob {
             BuilderConfigDataHandler.Config cfg = BuilderConfigDataHandler.get();
             long dayTime = level.getDayTime() % 24000;
 
-            // After a server restart the entity's sleeping pose is restored from NBT but the
-            // job state machine resets to IDLE. Resync: if the NPC is still in bed and it is
-            // still sleep time, re-enter SLEEPING; otherwise clear the pose so it stands up.
-            if (npc.isSleeping() && current != State.SLEEPING) {
-                if (cfg.bedtime >= 0 && isSleepTime(dayTime, cfg)) {
-                    current = State.SLEEPING;
-                    sleepBedPos = npc.getSleepingPos().orElse(null);
-                } else {
-                    npc.stopSleeping();
-                }
-            }
-
-            // Trigger sleep from any active state when bedtime is reached.
-            if (cfg.bedtime >= 0 && current != State.SLEEPING && isSleepTime(dayTime, cfg)) {
-                enterSleep();
-            }
+            NpcSleepController.SleepCheck sc = sleepController.checkTick(dayTime, cfg, current == State.SLEEPING);
+            if (sc == NpcSleepController.SleepCheck.RESYNC)   current = State.SLEEPING;
+            if (sc == NpcSleepController.SleepCheck.TRIGGER)  enterSleep();
         }
 
         npc.setSuppressLookAtPlayer(current == State.BUILD);
@@ -149,28 +121,45 @@ public class BuilderJob implements NpcJob {
                 if (saved != null) {
                     BuildGoal resumed = BuildGoal.fromActiveBuildState(saved, npc, resumeTown, resumeLevel);
                     if (resumed != null) {
-                        QueueEntry tentativeEntry = saved.queueDefId() != null
-                            ? new QueueEntry.NewBuild(saved.queueEntryId(), saved.queueDefId(), false, false, false) : null;
-                        // If this entry is already claimed by another builder (e.g. after a reload
-                        // where claims were lost and another builder scanned first), discard the
-                        // stale save so we don't double-build the same queue entry.
-                        if (tentativeEntry != null) {
-                            int idx = resumeTown.findQueueIndex(tentativeEntry.entryId());
-                            if (idx >= 0 && !resumeTown.claimQueueEntry(idx, npc.getUUID())) {
+                        if (saved.fromLevel() >= 0) {
+                            // Upgrade resume: locate the queue entry by its stored entryId and re-claim it.
+                            int idx = resumeTown.findQueueIndex(saved.queueEntryId());
+                            QueueEntry found = (idx >= 0) ? resumeTown.getConstructionQueue().get(idx) : null;
+                            if (found instanceof QueueEntry.Upgrade u && resumeTown.claimQueueEntry(idx, npc.getUUID())) {
+                                activeBuild = resumed;
+                                activeQueueEntry = u;
+                                current = State.BUILD;
+                                return;
+                            } else {
+                                // Entry gone or claimed by another builder; discard stale state.
                                 resumeTown.clearActiveBuild(mySlot);
                                 LevelTowns.get(resumeLevel).markDirty();
-                                // Fall through to normal queue scan below.
+                            }
+                        } else {
+                            // NewBuild resume.
+                            // If this entry is already claimed by another builder (e.g. after a reload
+                            // where claims were lost and another builder scanned first), discard the
+                            // stale save so we don't double-build the same queue entry.
+                            QueueEntry tentativeEntry = saved.queueDefId() != null
+                                ? new QueueEntry.NewBuild(saved.queueEntryId(), saved.queueDefId(), false, false, false) : null;
+                            if (tentativeEntry != null) {
+                                int idx = resumeTown.findQueueIndex(tentativeEntry.entryId());
+                                if (idx >= 0 && !resumeTown.claimQueueEntry(idx, npc.getUUID())) {
+                                    resumeTown.clearActiveBuild(mySlot);
+                                    LevelTowns.get(resumeLevel).markDirty();
+                                    // Fall through to normal queue scan below.
+                                } else {
+                                    activeBuild = resumed;
+                                    activeQueueEntry = tentativeEntry;
+                                    current = State.BUILD;
+                                    return;
+                                }
                             } else {
                                 activeBuild = resumed;
-                                activeQueueEntry = tentativeEntry;
+                                activeQueueEntry = null;
                                 current = State.BUILD;
                                 return;
                             }
-                        } else {
-                            activeBuild = resumed;
-                            activeQueueEntry = null;
-                            current = State.BUILD;
-                            return;
                         }
                     } else {
                         // Invalid saved state (e.g. def removed); discard to avoid looping.
@@ -287,6 +276,14 @@ public class BuilderJob implements NpcJob {
                 }
 
                 town.claimQueueEntry(i, myId);
+                int mySlotU = town.getNpcSlot("builder", myId);
+                if (mySlotU >= 0) {
+                    town.setActiveBuild(mySlotU, new ActiveBuildState(
+                        upgradeEntry.defId(), building.worldPos, building.rotation,
+                        BlockPos.ZERO, Direction.NORTH, "", BlockPos.ZERO,
+                        List.of(), null, upgradeEntry.entryId(), upgradeEntry.fromLevel()));
+                    LevelTowns.get(serverLevel).markDirty();
+                }
                 activeBuild = new BuildGoal(npc, new UpgradeAction(building, def, upgradeEntry.fromLevel(), town));
                 activeQueueEntry = entry;
                 current = State.BUILD;
@@ -350,7 +347,7 @@ public class BuilderJob implements NpcJob {
                     if (mySlotQ >= 0) {
                         town.setActiveBuild(mySlotQ, new ActiveBuildState(
                             def.id, s.pos(), s.rotation(), corrected.pos(), corrected.direction(),
-                            corrected.targetName(), s.entryConnectorWorldPos(), List.of(), defId, entry.entryId()));
+                            corrected.targetName(), s.entryConnectorWorldPos(), List.of(), defId, entry.entryId(), -1));
                         LevelTowns.get(serverLevel).markDirty();
                     }
                     current = State.BUILD;
@@ -449,7 +446,7 @@ public class BuilderJob implements NpcJob {
                         if (mySlot >= 0) {
                             town.setActiveBuild(mySlot, new ActiveBuildState(
                                 candidate.id, s.pos(), s.rotation(), correctedChosen.pos(), correctedChosen.direction(),
-                                correctedChosen.targetName(), s.entryConnectorWorldPos(), candidate.constructionCost, null, -1L));
+                                correctedChosen.targetName(), s.entryConnectorWorldPos(), candidate.constructionCost, null, -1L, -1));
                             LevelTowns.get(serverLevel).markDirty();
                         }
                         current = State.BUILD;
@@ -559,221 +556,65 @@ public class BuilderJob implements NpcJob {
     }
 
     private void tryStartActivity(Town town) {
-        List<ActivityDef> activities = BuilderConfigDataHandler.get().secondaryActivities;
-        if (activities.isEmpty()) return;
-
-        List<ActivityDef> candidateDefs = new ArrayList<>();
-        List<PlacedBuilding> candidateBuildings = new ArrayList<>();
-        for (PlacedBuilding building : town.getBuildings()) {
-            if (building.bb == null) continue;
-            for (ActivityDef def : activities) {
-                if (def.requiredBuilding().equals(building.defId)) {
-                    candidateDefs.add(def);
-                    candidateBuildings.add(building);
-                }
-            }
+        if (activityController.tryStart(town, npc, BuilderConfigDataHandler.get().secondaryActivities)) {
+            current = State.ACTIVITY;
+        } else {
+            maybeWander();
         }
-        if (candidateDefs.isEmpty()) { maybeWander(); return; }
-
-        int idx = npc.getRandom().nextInt(candidateDefs.size());
-        ActivityDef def = candidateDefs.get(idx);
-        PlacedBuilding building = candidateBuildings.get(idx);
-
-        BoundingBox bb = building.bb;
-        BlockPos target = new BlockPos(
-            (bb.minX() + bb.maxX()) / 2,
-            bb.minY(),
-            (bb.minZ() + bb.maxZ()) / 2
-        );
-        GoToPosition gtp = new GoToPosition(npc, target, BuilderConfigDataHandler.get().walkSpeed, 2.0);
-        currentActivity = new ActivityInstance(def, building, ActivityInstance.Phase.TRAVELING, gtp);
-
-        if (!def.heldItem().equals("minecraft:air")) {
-            BuiltInRegistries.ITEM.getOptional(new ResourceLocation(def.heldItem()))
-                .ifPresent(item -> npc.holdInMainHand(new ItemStack(item)));
-        }
-        activityPerformTicks = 0;
-        current = State.ACTIVITY;
     }
 
     private void tickActivity() {
         if (!(npc.level() instanceof ServerLevel serverLevel)) return;
         Town town = findTown(serverLevel, npc);
-
         if (town == null) {
-            cancelActivity();
+            activityController.cancel(npc);
             current = State.IDLE;
             return;
         }
-        // Interrupt only when there is actionable work: an upgrade (no prerequisites) or a
-        // NewBuild whose prerequisites are currently met. Entries blocked by prerequisites are
-        // not treated as actionable so they don't cause an IDLE/ACTIVITY flicker loop.
-        if (!town.getConstructionQueue().isEmpty()) {
-            UUID myId = npc.getUUID();
-            List<QueueEntry> queue = town.getConstructionQueue();
-            boolean hasUnclaimedWork = false;
-            for (int i = 0; i < queue.size(); i++) {
-                if (town.isQueueEntryClaimedByOther(i, myId)) continue;
-                QueueEntry entry = queue.get(i);
-                if (entry instanceof QueueEntry.NewBuild nb && nb.planned()) continue;
-                if (entry instanceof QueueEntry.Upgrade u && u.planned()) continue;
-                if (entry instanceof QueueEntry.Upgrade) {
-                    hasUnclaimedWork = true;
-                    break;
-                }
-                if (entry instanceof QueueEntry.NewBuild nb) {
-                    Optional<BuildingDef> maybeDef = BuildingDataHandler.get(nb.defId());
-                    if (maybeDef.isPresent() && town.meetsPrerequisites(maybeDef.get())) {
-                        hasUnclaimedWork = true;
-                        break;
-                    }
-                }
-            }
-            if (hasUnclaimedWork) {
-                cancelActivity();
-                current = State.IDLE;
-                return;
-            }
-        }
-
-        List<PlacedBuilding> currentBuildings = town.getBuildings();
-        boolean buildingFound = false;
-        for (PlacedBuilding b : currentBuildings) {
-            if (b == currentActivity.targetBuilding) { buildingFound = true; break; }
-        }
-        if (!buildingFound) {
-            cancelActivity();
+        if (hasActionableWork(town)) {
+            activityController.cancel(npc);
             current = State.IDLE;
             return;
         }
-
-        switch (currentActivity.phase) {
-            case TRAVELING   -> tickTraveling(serverLevel);
-            case APPROACHING -> tickApproaching(serverLevel);
-            case PERFORMING  -> tickPerforming();
-        }
+        SecondaryActivityController.Result r = activityController.tick(
+            serverLevel, town, npc, BuilderConfigDataHandler.get().walkSpeed);
+        if (r == SecondaryActivityController.Result.NOT_FOUND) current = State.IDLE;
     }
 
-    private void tickTraveling(ServerLevel serverLevel) {
-        boolean arrived = currentActivity.goToPosition.tick();
-        if (!arrived) return;
-
-        npc.getNavigation().stop();
-
-        String targetBlockId = currentActivity.def.targetBlock();
-        if (targetBlockId == null) {
-            currentActivity.phase = ActivityInstance.Phase.PERFORMING;
-            return;
-        }
-        // Scan the building's bounding box for the closest matching block.
-        Block block = BuiltInRegistries.BLOCK.getOptional(new ResourceLocation(targetBlockId)).orElse(null);
-        if (block == null) {
-            cancelActivity();
-            current = State.IDLE;
-            return;
-        }
-
-        net.minecraft.world.level.levelgen.structure.BoundingBox bb = currentActivity.targetBuilding.bb;
-        BlockPos found = null;
-        double bestDist = Double.MAX_VALUE;
-        for (int bx = bb.minX(); bx <= bb.maxX(); bx++) {
-            for (int by = bb.minY(); by <= bb.maxY(); by++) {
-                for (int bz = bb.minZ(); bz <= bb.maxZ(); bz++) {
-                    BlockPos p = new BlockPos(bx, by, bz);
-                    if (serverLevel.getBlockState(p).is(block)) {
-                        double d = npc.distanceToSqr(Vec3.atCenterOf(p));
-                        if (d < bestDist) {
-                            bestDist = d;
-                            found = p;
-                        }
-                    }
-                }
+    // Returns true when the queue has at least one unclaimed entry the builder can act on now.
+    // Planned entries (waiting for stock promotion) and entries already under upgrade are excluded
+    // so they don't cause an IDLE/ACTIVITY flicker loop.
+    private boolean hasActionableWork(Town town) {
+        UUID myId = npc.getUUID();
+        List<QueueEntry> queue = town.getConstructionQueue();
+        boolean onlyPlannedUpgrades = false;
+        for (int i = 0; i < queue.size(); i++) {
+            if (town.isQueueEntryClaimedByOther(i, myId)) continue;
+            QueueEntry entry = queue.get(i);
+            if (entry instanceof QueueEntry.NewBuild nb && nb.planned()) continue;
+            if (entry instanceof QueueEntry.Upgrade u && u.planned()) { onlyPlannedUpgrades = true; continue; }
+            if (entry instanceof QueueEntry.Upgrade u) {
+                if (!town.isUnderUpgrade(u.buildingWorldPos())) return true;
+                continue;
+            }
+            if (entry instanceof QueueEntry.NewBuild nb) {
+                Optional<BuildingDef> maybeDef = BuildingDataHandler.get(nb.defId());
+                if (maybeDef.isPresent() && town.meetsPrerequisites(maybeDef.get())) return true;
             }
         }
-
-        if (found == null) {
-            cancelActivity();
-            current = State.IDLE;
-            return;
+        if (onlyPlannedUpgrades) {
         }
-
-        currentActivity.approachTargetPos = found;
-        currentActivity.approachGoTo = new GoToPosition(npc, found, BuilderConfigDataHandler.get().walkSpeed, 1.5);
-        currentActivity.phase = ActivityInstance.Phase.APPROACHING;
-    }
-
-    private void tickApproaching(ServerLevel serverLevel) {
-        boolean arrived = currentActivity.approachGoTo.tick();
-        if (arrived) {
-            npc.getNavigation().stop();
-            currentActivity.phase = ActivityInstance.Phase.PERFORMING;
-        }
-    }
-
-    private void tickPerforming() {
-        npc.getNavigation().stop();
-        if (currentActivity.def.animationType() == AnimationType.CRAFT) {
-            // Look at the target block every tick to simulate focused crafting.
-            BlockPos lookPos = currentActivity.approachTargetPos;
-            if (lookPos != null) {
-                npc.getLookControl().setLookAt(
-                    lookPos.getX() + 0.5, lookPos.getY() + 0.5, lookPos.getZ() + 0.5,
-                    10f, 10f
-                );
-            }
-            if (activityPerformTicks % 25 == 0) {
-                npc.notifyBlockPlaced();
-            }
-        } else {
-            BlockPos minePos = currentActivity.approachTargetPos;
-            if (minePos != null) {
-                npc.getLookControl().setLookAt(
-                    minePos.getX() + 0.5, minePos.getY() + 0.5, minePos.getZ() + 0.5,
-                    10f, 10f
-                );
-            }
-            if (activityPerformTicks % 25 == 0) {
-                npc.swing(InteractionHand.MAIN_HAND);
-                npc.notifyBlockPlaced();
-            }
-        }
-        activityPerformTicks++;
-    }
-
-    private void cancelActivity() {
-        if (currentActivity == null) return;
-        npc.freeHands();
-        npc.getNavigation().stop();
-        currentActivity = null;
-        activityPerformTicks = 0;
-    }
-
-    private void maybeWander() {
-        if (!npc.getNavigation().isDone()) return;
-        Vec3 target = DefaultRandomPos.getPos(npc, 10, 7);
-        if (target != null) npc.getNavigation().moveTo(target.x, target.y, target.z, 0.4);
-    }
-
-    // Returns true when the current daytime falls inside the configured sleep window.
-    // Handles midnight wrap-around: e.g., bedtime=13000 wakeup=1000 spans past midnight.
-    private boolean isSleepTime(long dayTime, BuilderConfigDataHandler.Config cfg) {
-        int sleep = cfg.bedtime;
-        int wake  = cfg.wakeupTime;
-        if (sleep > wake) {
-            return dayTime >= sleep || dayTime < wake;
-        } else {
-            return dayTime >= sleep && dayTime < wake;
-        }
+        return false;
     }
 
     // Interrupts whatever the builder was doing and switches to SLEEPING.
-    // ACTIVITY: cancelActivity() cleans up hands, navigation, and currentActivity.
-    // BUILD (NewBuild): ActiveBuildState persists the resume point; tickIdle() reconstructs it on wake.
-    // BUILD (Upgrade): no ActiveBuildState is saved; the queue entry stays and the NPC restarts the
-    //   upgrade on wake via a fresh computeDiff. We must clear underUpgrade and release the queue
-    //   claim here so the guard in tickPlayerQueue() does not permanently skip the entry.
+    // ACTIVITY: activityController.cancel() cleans up hands, navigation, and current activity.
+    // BUILD (NewBuild or Upgrade): ActiveBuildState persists the resume point; tickIdle()
+    //   reconstructs it on wake via fromActiveBuildState(). For Upgrade builds we must also clear
+    //   underUpgrade and release the queue claim so tickPlayerQueue() does not skip the entry while
+    //   the NPC is asleep; both are re-established when the NPC wakes and re-enters tickIdle().
     private void enterSleep() {
-        if (current == State.ACTIVITY) cancelActivity();
+        if (current == State.ACTIVITY) activityController.cancel(npc);
         if (current == State.BUILD && activeQueueEntry instanceof QueueEntry.Upgrade u) {
             if (npc.level() instanceof ServerLevel sl) {
                 Town t = findTown(sl, npc);
@@ -789,78 +630,32 @@ public class BuilderJob implements NpcJob {
         npc.freeHands();
         activeBuild      = null;
         activeQueueEntry = null;
-        sleepBedPos      = null;
-        sleepGoTo        = null;
+        sleepController.reset();
         current          = State.SLEEPING;
     }
 
-    // Drives the full sleep lifecycle: walk to bed -> lie down -> wake up.
-    // Internal progression is tracked by sleepBedPos and sleepGoTo fields, not sub-states.
     private void tickSleeping() {
         if (!(npc.level() instanceof ServerLevel level)) return;
         BuilderConfigDataHandler.Config cfg = BuilderConfigDataHandler.get();
-        long dayTime = level.getDayTime() % 24000;
-
-        // Wake up when the sleep window ends.
-        if (!isSleepTime(dayTime, cfg)) {
-            if (npc.isSleeping()) npc.stopSleeping();
-            sleepBedPos = null;
-            sleepGoTo   = null;
-            current     = State.IDLE;
-            return;
-        }
-
-        // Already lying in bed -- wait for the wake condition above.
-        if (npc.isSleeping()) return;
-
-        // Locate the rest bed on first entry (or after a server restart where sleepBedPos was lost).
-        if (sleepBedPos == null) {
-            Town town = findTown(level, npc);
-            if (town == null) return;
-            sleepBedPos = findRestBed(level, town, cfg);
-            if (sleepBedPos == null) return;
-        }
-
-        // Navigate to the bed.
-        if (sleepGoTo == null) {
-            sleepGoTo = new GoToPosition(npc, sleepBedPos, cfg.walkSpeed, 2.0);
-        }
-
-        // Arrived: lie down.
-        if (sleepGoTo.tick()) {
-            sleepGoTo = null;
-            npc.startSleeping(sleepBedPos);
+        Town town = findTown(level, npc);
+        if (!sleepController.tick(level, town, cfg)) {
+            current = State.IDLE;
         }
     }
 
-    // Finds the first BedBlock HEAD in any building listed in cfg.restBuildings.
-    // Returns null if no suitable bed is found.
-    private BlockPos findRestBed(ServerLevel level, Town town, BuilderConfigDataHandler.Config cfg) {
-        for (PlacedBuilding building : town.getBuildings()) {
-            if (!cfg.restBuildings.contains(building.defId)) continue;
-            if (building.bb == null) continue;
-            BlockPos bed = scanBedInBox(level, building.bb);
-            if (bed != null) return bed;
-        }
-        return null;
-    }
-
-    // Scans a bounding box for a BedBlock in its HEAD part position.
-    // HEAD is used because startSleepInBed requires the head position.
-    private static BlockPos scanBedInBox(ServerLevel level, BoundingBox bb) {
-        for (int x = bb.minX(); x <= bb.maxX(); x++) {
-            for (int y = bb.minY(); y <= bb.maxY(); y++) {
-                for (int z = bb.minZ(); z <= bb.maxZ(); z++) {
-                    BlockPos pos = new BlockPos(x, y, z);
-                    BlockState state = level.getBlockState(pos);
-                    if (state.getBlock() instanceof BedBlock
-                            && state.getValue(BedBlock.PART) == BedPart.HEAD) {
-                        return pos;
-                    }
-                }
-            }
-        }
-        return null;
+    // Called by Npc.remove() when the NPC entity is removed from the world (e.g. death).
+    // Clears the underUpgrade marker and releases the queue claim so another builder can resume.
+    // ActiveBuildState is intentionally left in place: a replacement NPC will read it from tickIdle()
+    // and resume the upgrade at the next unplaced block via skipDiff.
+    public void onRemoved() {
+        if (!(npc.level() instanceof ServerLevel sl)) return;
+        if (!(activeQueueEntry instanceof QueueEntry.Upgrade u)) return;
+        Town town = findTown(sl, npc);
+        if (town == null) return;
+        town.removeUnderUpgrade(u.buildingWorldPos());
+        int idx = town.findQueueIndex(u.entryId());
+        if (idx >= 0) town.releaseQueueClaim(idx, npc.getUUID());
+        LevelTowns.get(sl).markDirty();
     }
 
     private <T> void shuffleInPlace(List<T> list) {
@@ -876,55 +671,56 @@ public class BuilderJob implements NpcJob {
         if (activeBuild == null) { current = State.IDLE; return; }
         if (activeBuild.tick()) {
             BlockPos completedPos = activeBuild.getFinalPlacementPos();
-            if (npc.level() instanceof ServerLevel sl) {
-                Town qTown = findTown(sl, npc);
-                // Clear the persisted build state regardless of success or failure.
-                if (qTown != null) {
-                    int mySlot = qTown.getNpcSlot("builder", npc.getUUID());
-                    if (mySlot >= 0) qTown.clearActiveBuild(mySlot);
-                }
-                if (!activeBuild.isFailed() && activeQueueEntry != null && qTown != null) {
-                    // Release the claim before consuming so indices stay consistent.
-                    int claimIdx = qTown.findQueueIndex(activeQueueEntry.entryId());
-                    if (claimIdx >= 0) qTown.releaseQueueClaim(claimIdx, npc.getUUID());
-                    String placedDefId = activeQueueEntry instanceof QueueEntry.NewBuild nb ? nb.defId() : null;
-                    TownLogType doneType = activeQueueEntry instanceof QueueEntry.Upgrade ? TownLogType.UPGRADE_DONE : TownLogType.BUILD_DONE;
-                    String doneDefId = activeQueueEntry instanceof QueueEntry.NewBuild nb2 ? nb2.defId()
-                        : activeQueueEntry instanceof QueueEntry.Upgrade u2 ? u2.defId() : "";
-                    qTown.consumeQueueEntry(activeQueueEntry);
-                    if (placedDefId != null) qTown.onBuildingPlaced(placedDefId);
-                    TownLogEntry doneLog = new TownLogEntry(doneType, doneDefId, sl.getGameTime());
-                    qTown.addLogEntry(doneLog);
-                    NetworkHelper.pushLogEntryToWatchers(sl, qTown, npc.getTownAnchorPos(), doneLog);
-                    LevelTowns.get(sl).markDirty();
-                } else if (activeBuild.isFailed() && activeQueueEntry != null && qTown != null) {
-                    // Release claim on failure so another builder can attempt this entry.
-                    int claimIdx = qTown.findQueueIndex(activeQueueEntry.entryId());
-                    if (claimIdx >= 0) qTown.releaseQueueClaim(claimIdx, npc.getUUID());
-                }
-            }
-            // Remove construction/upgrade markers and fire targeted packets.
-            if (npc.level() instanceof ServerLevel sl) {
-                Town doneTown = findTown(sl, npc);
-                if (doneTown != null) {
-                    doneTown.removeUnderConstruction(completedPos);
-                    doneTown.removeUnderUpgrade(completedPos);
-                    BlockPos anchor = npc.getTownAnchorPos();
-                    NetworkHelper.pushBuildingListToWatchers(sl, doneTown, anchor);
-                    NetworkHelper.pushStockToWatchers(sl, doneTown, anchor);
-                    // If a house was just built, total resident count changed.
-                    if (activeQueueEntry instanceof QueueEntry.NewBuild nb) {
-                        org.dawnoftime.onceuponatown.datapack.BuildingDataHandler.get(nb.defId()).ifPresent(def -> {
-                            if (def.residents > 0) {
-                                NetworkHelper.pushCitizenUpdateToWatchers(sl, doneTown, anchor);
-                            }
-                        });
-                    }
-                }
-            }
+            boolean failed = activeBuild.isFailed();
+            QueueEntry completedEntry = activeQueueEntry;
             activeQueueEntry = null;
             activeBuild = null;
             current = State.IDLE;
+
+            if (!(npc.level() instanceof ServerLevel sl)) return;
+            Town town = findTown(sl, npc);
+
+            // Clear the persisted build state regardless of success or failure.
+            if (town != null) {
+                int mySlot = town.getNpcSlot("builder", npc.getUUID());
+                if (mySlot >= 0) town.clearActiveBuild(mySlot);
+            }
+
+            if (!failed && completedEntry != null && town != null) {
+                // Release the claim before consuming so indices stay consistent.
+                int claimIdx = town.findQueueIndex(completedEntry.entryId());
+                if (claimIdx >= 0) town.releaseQueueClaim(claimIdx, npc.getUUID());
+                String placedDefId = completedEntry instanceof QueueEntry.NewBuild nb ? nb.defId() : null;
+                TownLogType doneType = completedEntry instanceof QueueEntry.Upgrade ? TownLogType.UPGRADE_DONE : TownLogType.BUILD_DONE;
+                String doneDefId = completedEntry instanceof QueueEntry.NewBuild nb2 ? nb2.defId()
+                    : completedEntry instanceof QueueEntry.Upgrade u2 ? u2.defId() : "";
+                town.consumeQueueEntry(completedEntry);
+                if (placedDefId != null) town.onBuildingPlaced(placedDefId);
+                TownLogEntry doneLog = new TownLogEntry(doneType, doneDefId, sl.getGameTime());
+                town.addLogEntry(doneLog);
+                NetworkHelper.pushLogEntryToWatchers(sl, town, npc.getTownAnchorPos(), doneLog);
+                LevelTowns.get(sl).markDirty();
+            } else if (failed && completedEntry != null && town != null) {
+                // Release claim on failure so another builder can attempt this entry.
+                int claimIdx = town.findQueueIndex(completedEntry.entryId());
+                if (claimIdx >= 0) town.releaseQueueClaim(claimIdx, npc.getUUID());
+            }
+
+            // Remove construction/upgrade markers and push UI updates.
+            if (town != null) {
+                town.removeUnderConstruction(completedPos);
+                town.removeUnderUpgrade(completedPos);
+                BlockPos anchor = npc.getTownAnchorPos();
+                NetworkHelper.pushBuildingListToWatchers(sl, town, anchor);
+                NetworkHelper.pushStockToWatchers(sl, town, anchor);
+                if (completedEntry instanceof QueueEntry.NewBuild nb) {
+                    org.dawnoftime.onceuponatown.datapack.BuildingDataHandler.get(nb.defId()).ifPresent(def -> {
+                        if (def.residents > 0) NetworkHelper.pushCitizenUpdateToWatchers(sl, town, anchor);
+                    });
+                }
+            } else {
+                LOGGER.warn("[OUAT-BUILD] Town unloaded before construction markers could be cleared at {}", completedPos);
+            }
         }
     }
 

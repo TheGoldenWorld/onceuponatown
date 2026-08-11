@@ -39,12 +39,12 @@ public class QuestManager {
                 }
             });
         }
-        if (def.reward() != null) {
+        for (QuestDef.RewardTemplate rt : def.rewards()) {
             Quest.Reward r = new Quest.Reward();
-            r.type = def.reward().type();
-            if (def.reward().item() != null) r.item = BuiltInRegistries.ITEM.get(new ResourceLocation(def.reward().item()));
-            r.amount = def.reward().amount();
-            q.reward = r;
+            r.type = rt.type();
+            if (rt.item() != null) r.item = BuiltInRegistries.ITEM.get(new ResourceLocation(rt.item()));
+            r.amount = rt.amount();
+            q.rewards.add(r);
         }
         return q;
     }

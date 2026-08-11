@@ -64,8 +64,8 @@ public class Town {
     public Town() {
     }
 
-    public void registerBuilding(BlockPos worldPos, String defId, List<ConnectionPoint> connections, BoundingBox bb, Rotation rotation, List<BlockPos> obstaclePositions) {
-        buildings.add(new PlacedBuilding(defId, worldPos, bb, rotation, obstaclePositions));
+    public void registerBuilding(BlockPos worldPos, String defId, List<ConnectionPoint> connections, BoundingBox bb, Rotation rotation, List<BlockPos> obstaclePositions, @org.jetbrains.annotations.Nullable BlockPos entryPos) {
+        buildings.add(new PlacedBuilding(defId, worldPos, bb, rotation, obstaclePositions, entryPos));
         for (ConnectionPoint cp : connections) {
             freeConnections.add(new ConnectionPoint(cp.pos(), cp.direction(), cp.targetName(), cpInsertionCounter++));
         }
@@ -443,8 +443,10 @@ public class Town {
         return true;
     }
 
-    public QueueEntry.Upgrade getPlannedAutonomousUpgrade() { return queueState.findPlannedAutonomousUpgrade(); }
-    public boolean hasRealAutonomousUpgradeEntry()          { return queueState.hasRealAutonomousUpgradeEntry(); }
+    public QueueEntry.Upgrade getPlannedAutonomousUpgrade()   { return queueState.findPlannedAutonomousUpgrade(); }
+    public boolean hasRealAutonomousUpgradeEntry()            { return queueState.hasRealAutonomousUpgradeEntry(); }
+    public int countRealAutonomousUpgradeEntries()            { return queueState.countRealAutonomousUpgradeEntries(); }
+    public int countPlannedAutonomousUpgradeEntries()         { return queueState.countPlannedAutonomousUpgradeEntries(); }
 
     // Removes all locked NewBuild entries whose defId is absent from newSequence.
     // Called when the player switches the autonomy path so orphaned locks are cancelled.

@@ -37,4 +37,5 @@ public interface BuilderAction {
     // Writes action-specific save data. BuildGoal adds build_progress on top.
     // Write nothing for actions that do not support mid-progress persistence.
     void saveTo(CompoundTag tag);
+
 }

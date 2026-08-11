@@ -5,6 +5,7 @@
     "settlement_3",
 
     "lake",
+    "fisherman",
 
     "wild_crops",
     "wheat_field",
@@ -39,7 +40,6 @@
 
     "merchant_shop",
 
-    "house",
     "house_2",
     "house_3",
 
@@ -47,6 +47,9 @@
     "wild_spot",
     "lone_garden",
     "lone_place",
-    "fountain_place"
+    "fountain_place",
+
+    "brownfield",
+    "house_slot"
   ]
 }

@@ -467,7 +467,7 @@ public class TownSummaryWidget extends DraggableWidget {
             if (cell.locked()) {
                 g.pose().pushPose();
                 g.pose().translate(0, 0, 200);
-                NbtPreviewWidget.drawPadlockIcon(g, cellX + 5, cellY + 4);
+                NbtPreviewWidget.drawPadlockIcon(g, cellX + 1, cellY + 1);
                 g.pose().popPose();
             }
         }

@@ -1,0 +1,20 @@
+{
+  "walk_speed": 0.6,
+  "mine_delay_ticks": 15,
+  "mine_session_ticks": 300,
+
+  "work_buildings": ["open_mine", "stone_breach"],
+
+  "mineable_blocks": [
+    "minecraft:stone",
+    "minecraft:tuff",
+    "minecraft:diorite",
+    "minecraft:andesite",
+    "minecraft:granite"
+  ],
+  "secondary_activities": [],
+
+  "bedtime": 13000,
+  "wakeup_time": 1000,
+  "rest_buildings": ["house", "house_1", "house_2"]
+}

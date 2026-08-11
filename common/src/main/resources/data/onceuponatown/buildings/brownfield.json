@@ -1,0 +1,24 @@
+{
+  "id": "brownfield",
+  "nbt": "onceuponatown:plains/jobs/brownfield",
+  "entry_pool": "onceuponatown:jobs",
+  "icon_item": "minecraft:coarse_dirt",
+  "category": "player",
+  "weight": 1,
+  "construction_cost": [
+    {
+      "item": "minecraft:oak_log",
+      "amount": 25
+    },
+    {
+      "item": "minecraft:cobblestone",
+      "amount": 10
+    }
+  ],
+  "player_cost": [
+    {
+      "item": "minecraft:emerald",
+      "amount": 25
+    }
+  ]
+}

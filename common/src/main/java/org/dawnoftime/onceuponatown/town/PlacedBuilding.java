@@ -8,6 +8,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,6 +25,9 @@ public class PlacedBuilding {
     // World positions of obstacle blocks recorded at placement time for SITE_CLEARANCE quest verification.
     // Populated only for terrain-matched buildings with obstacle_blocks defined. Empty otherwise.
     public final List<BlockPos> obstaclePositions;
+    // Road-facing connection point used when the NPC originally built this building.
+    // Always set for NPC-built buildings; null for worldgen starters (ChunkGeneratorMixin).
+    public final @Nullable BlockPos entryPos;
     // Per-instance production multiplier. 1.0 = normal. Set to 1.15 for orientation bootstrap buildings.
     private double instanceProductionMultiplier = 1.0;
     private int upgradeLevel = 0;
@@ -31,12 +35,14 @@ public class PlacedBuilding {
     private boolean herdFed = true;
     private final Map<Item, Integer> stock = new HashMap<>();
 
-    public PlacedBuilding(String defId, BlockPos worldPos, BoundingBox bb, Rotation rotation, List<BlockPos> obstaclePositions) {
+    public PlacedBuilding(String defId, BlockPos worldPos, BoundingBox bb, Rotation rotation,
+                          List<BlockPos> obstaclePositions, @Nullable BlockPos entryPos) {
         this.defId = defId;
         this.worldPos = worldPos;
         this.bb = bb;
         this.rotation = rotation;
         this.obstaclePositions = obstaclePositions != null ? List.copyOf(obstaclePositions) : List.of();
+        this.entryPos = entryPos;
     }
 
     // Called by ProductionManager - clamps to per-building resolvedCapacity, returns true if any stock was added
@@ -124,6 +130,7 @@ public class PlacedBuilding {
             tag.putInt("UpgradeLevel", upgradeLevel);
         if (!herdFed)
             tag.putBoolean("HerdFed", false);
+        if (entryPos != null) tag.putLong("EntryPos", entryPos.asLong());
         return tag;
     }
 
@@ -145,7 +152,8 @@ public class PlacedBuilding {
         if (tag.contains("ObstaclePositions")) {
             for (long l : tag.getLongArray("ObstaclePositions")) obstaclePositions.add(BlockPos.of(l));
         }
-        PlacedBuilding b = new PlacedBuilding(defId, pos, bb, rotation, obstaclePositions);
+        BlockPos entryPos = tag.contains("EntryPos") ? BlockPos.of(tag.getLong("EntryPos")) : null;
+        PlacedBuilding b = new PlacedBuilding(defId, pos, bb, rotation, obstaclePositions, entryPos);
         if (tag.contains("InstanceProductionMultiplier"))
             b.instanceProductionMultiplier = tag.getDouble("InstanceProductionMultiplier");
         if (tag.contains("UpgradeLevel"))

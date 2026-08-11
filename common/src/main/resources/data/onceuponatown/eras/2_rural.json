@@ -22,7 +22,7 @@
 
   "auto_build_sequence": [{"defId": "grove", "count": 2}, "carrot_field", "oven", "potato_field", "lumberjack"],
 
-  "unlocked_building_ids": ["lone_place", "carpenter", "wheat_farm"],
+  "unlocked_building_ids": ["lone_place", "fisherman", "wheat_farm"],
   "unlock_npc_counts": { "builder": 1 },
   "auto_upgrade_ids": ["settlement_3"],
 

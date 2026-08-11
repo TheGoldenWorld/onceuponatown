@@ -21,7 +21,7 @@
 
   "auto_build_sequence": [{"defId": "grove", "count": 2}, "oven", {"defId": "stone_breach", "count": 2}, "lumberjack"],
 
-  "unlocked_building_ids": ["lone_place", "carpenter", "open_mine"],
+  "unlocked_building_ids": ["lone_place", "fisherman", "open_mine"],
   "unlock_npc_counts": { "builder": 1 },
   "auto_upgrade_ids": ["settlement"],
 

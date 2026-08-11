@@ -1,0 +1,71 @@
+{
+  "walk_speed": 0.6,
+  "shear_delay_ticks": 20,
+  "sheep_buildings": ["sheep_field", "settlement_2"],
+  "bedtime": 13000,
+  "wakeup_time": 1000,
+  "rest_buildings": ["house", "house_1", "house_2"],
+
+  "secondary_activities": [
+    {
+      "requiredBuilding": "oven",
+      "heldItem": "minecraft:mutton",
+      "animationType": "SMELT",
+      "target_block": "minecraft:furnace"
+    },
+    {
+      "requiredBuilding": "settlement",
+      "heldItem": "minecraft:mutton",
+      "animationType": "SMELT",
+      "target_block": "minecraft:furnace"
+    },
+    {
+      "requiredBuilding": "settlement_2",
+      "heldItem": "minecraft:mutton",
+      "animationType": "SMELT",
+      "target_block": "minecraft:furnace"
+    },
+    {
+      "requiredBuilding": "settlement_2",
+      "heldItem": "minecraft:mutton",
+      "animationType": "SMELT",
+      "target_block": "minecraft:smoker"
+    },
+    {
+      "requiredBuilding": "settlement_3",
+      "heldItem": "minecraft:mutton",
+      "animationType": "SMELT",
+      "target_block": "minecraft:furnace"
+    },
+    {
+      "requiredBuilding": "workshop",
+      "heldItem": "minecraft:white_wool",
+      "animationType": "CRAFT",
+      "target_block": "minecraft:crafting_table"
+    },
+    {
+      "requiredBuilding": "oven",
+      "heldItem": "minecraft:white_wool",
+      "animationType": "CRAFT",
+      "target_block": "minecraft:crafting_table"
+    },
+    {
+      "requiredBuilding": "settlement",
+      "heldItem": "minecraft:white_wool",
+      "animationType": "CRAFT",
+      "target_block": "minecraft:crafting_table"
+    },
+    {
+      "requiredBuilding": "settlement_2",
+      "heldItem": "minecraft:white_wool",
+      "animationType": "CRAFT",
+      "target_block": "minecraft:crafting_table"
+    },
+    {
+      "requiredBuilding": "settlement_3",
+      "heldItem": "minecraft:white_wool",
+      "animationType": "CRAFT",
+      "target_block": "minecraft:crafting_table"
+    }
+  ]
+}

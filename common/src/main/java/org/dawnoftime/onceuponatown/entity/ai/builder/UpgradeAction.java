@@ -39,6 +39,8 @@ public class UpgradeAction implements BuilderAction {
     // Blocks deeper than the base template the target NBT level extends underground.
     // Shifts the placement origin down so underground galleries land at the correct Y.
     private final int undergroundDepth;
+    // Set true on resume (server restart or sleep) to filter steps already applied in the world.
+    boolean skipDiff = false;
 
     public UpgradeAction(PlacedBuilding building, BuildingDef def, int fromLevel, Town town) {
         this.building = building;
@@ -51,7 +53,9 @@ public class UpgradeAction implements BuilderAction {
     }
 
     @Override
-    public BlockPos getTargetPos() { return building.worldPos; }
+    public BlockPos getTargetPos() {
+        return building.entryPos != null ? building.entryPos : building.worldPos;
+    }
 
     @Override
     public BlockPos getOrigin() { return building.worldPos.offset(0, -undergroundDepth, 0); }
@@ -85,18 +89,18 @@ public class UpgradeAction implements BuilderAction {
             steps.add(new BlockStep(getOrigin().offset(removePos), Blocks.AIR.defaultBlockState(), null));
         }
 
-        // Additions: normal blocks first, deferred (water, lily pads) last.
+        // Additions: normal blocks first, deferred (waterlogged=0, water=1, lily pads=2) last.
         List<BlockStep> normal = new ArrayList<>();
         List<BlockStep> deferred = new ArrayList<>();
         for (SchematicBlock b : diff.toAdd()) {
             BlockStep step = new BlockStep(getOrigin().offset(b.localPos()), b.state(), b.nbt());
-            if (SchematicConstants.DEFERRED_PLACEMENT_PRIORITY.containsKey(b.state().getBlock())) {
+            if (SchematicConstants.getDeferredPriority(b.state()).isPresent()) {
                 deferred.add(step);
             } else {
                 normal.add(step);
             }
         }
-        deferred.sort(Comparator.comparingInt(b -> SchematicConstants.DEFERRED_PLACEMENT_PRIORITY.get(b.state().getBlock())));
+        deferred.sort(Comparator.comparingInt(b -> SchematicConstants.getDeferredPriority(b.state()).getAsInt()));
         steps.addAll(normal);
         steps.addAll(deferred);
 
@@ -106,6 +110,17 @@ public class UpgradeAction implements BuilderAction {
             level, fromNbt, toNbt, building.rotation, building.worldPos, undergroundDepth);
         for (SchematicEntity se : entityDiff) {
             steps.add(new EntityStep(se.worldPos(), se.nbt()));
+        }
+
+        // On resume, filter steps whose world state already matches the target (already applied).
+        // Symmetric to computeRemainingBlocks() for NewBuildAction. EntitySteps are always re-applied.
+        if (skipDiff) {
+            steps = steps.stream().filter(step -> {
+                if (step instanceof BlockStep bs) {
+                    return !level.getBlockState(bs.targetPos()).equals(bs.state());
+                }
+                return true;
+            }).collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
         }
 
         return steps;
@@ -144,8 +159,7 @@ public class UpgradeAction implements BuilderAction {
     @Override
     public boolean isFailed() { return false; }
 
-    // Upgrades do not persist mid-progress state; the queue entry remains and the NPC
-    // will redo the whole upgrade after a server restart.
+    // State is persisted in Town.activeBuilds by the caller (BuilderJob); no additional data needed here.
     @Override
     public void saveTo(CompoundTag tag) {}
 }

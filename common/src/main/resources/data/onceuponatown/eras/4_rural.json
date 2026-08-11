@@ -18,9 +18,10 @@
     { "defId": "granary", "count": 1 }
   ],
 
-  "auto_build_sequence": ["granary"],
-
+  "auto_build_sequence": ["granary", "carpenter"],
   "auto_upgrade_ids": ["settlement_3"],
+
+  "unlocked_building_ids": ["house_slot"],
 
   "next_orientation": "rural"
 }

@@ -47,7 +47,7 @@ public class ClientBuildingProductionTooltip implements ClientTooltipComponent {
             if (!row.isHeader()) {
                 graphics.renderItem(row.stack(), x, y + i * ROW_HEIGHT + 1);
                 if (row.locked()) {
-                    NbtPreviewWidget.drawPadlockIcon(graphics, x + 4, y + i * ROW_HEIGHT + 4);
+                    NbtPreviewWidget.drawPadlockIcon(graphics, x, y + i * ROW_HEIGHT + 1);
                 }
             }
         }

@@ -2,7 +2,7 @@
   "id": "lake",
   "nbt": "onceuponatown:plains/jobs/lake",
   "entry_pool": "onceuponatown:jobs",
-  "icon_item": "minecraft:cod",
+  "icon_item": "minecraft:lily_pad",
   "category": "naturals",
   "weight": 1,
 

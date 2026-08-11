@@ -5,8 +5,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.core.BlockPos;
+import org.dawnoftime.onceuponatown.client.renderer.PingRenderer;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
@@ -29,10 +31,11 @@ public class TownMapWidget extends AbstractWidget {
     private static final Rgb BUILDING_RGB    = new Rgb(99, 83, 49);
     private static final Rgb JOB_RGB         = new Rgb(180, 50, 50);
     private static final Rgb GARDEN_RGB      = new Rgb(55, 130, 55);
-    private static final Rgb NATURALS_RGB     = new Rgb(110, 110, 110);
+    private static final Rgb NATURALS_RGB    = new Rgb(110, 110, 110);
     private static final Rgb ROAD_RGB        = new Rgb(147, 147, 147);
     private static final Rgb HOVER_RGB       = new Rgb(234, 200, 190);
     private static final Rgb TOWN_CENTER_RGB = new Rgb(220, 180, 40);
+    private static final Rgb PLAYER_RGB      = new Rgb(60, 100, 200);
 
     private static final int CONSTRUCTION_YELLOW = 0xFFFFC800;
     private static final int CONSTRUCTION_BLACK  = 0xFF1E1E1E;
@@ -129,7 +132,7 @@ public class TownMapWidget extends AbstractWidget {
         }
 
         return new MapElement(MapCategory.ROAD, "", "", List.of(name), Optional.empty(),
-            footprint, minX, minX + sizeX, minZ, minZ + sizeZ, false, 0L, false);
+            footprint, minX, minX + sizeX, minZ, minZ + sizeZ, false, 0L, 0L, false);
     }
 
     private MapElement createUnderConstructionMapElement(CompoundTag tag, BlockPos nwCorner) {
@@ -145,7 +148,7 @@ public class TownMapWidget extends AbstractWidget {
                 .withStyle(net.minecraft.ChatFormatting.YELLOW)
         );
         return new MapElement(MapCategory.UNDER_CONSTRUCTION, "", "", desc, Optional.empty(),
-            null, minX, minX + sizeX, minZ, minZ + sizeZ, false, 0L, false);
+            null, minX, minX + sizeX, minZ, minZ + sizeZ, false, 0L, 0L, false);
     }
 
     private MapElement createBuildingMapElement(CompoundTag tag, BlockPos nwCorner) {
@@ -166,6 +169,7 @@ public class TownMapWidget extends AbstractWidget {
         boolean isUpgrading = tag.getBoolean("IsUpgrading");
         int minX = originPos.getX() - nwCorner.getX();
         int minZ = originPos.getZ() - nwCorner.getZ();
+        BlockPos centerPos = new BlockPos(originPos.getX() + sizeX / 2, originPos.getY(), originPos.getZ() + sizeZ / 2);
         List<Component> desc = new ArrayList<>(List.of(name));
         if (isUpgrading) {
             desc.add(Component.translatable("onceuponatown.tooltip.under_upgrade")
@@ -173,8 +177,9 @@ public class TownMapWidget extends AbstractWidget {
         }
         desc.add(Component.literal("Left-click: details").withStyle(ChatFormatting.DARK_GRAY));
         desc.add(Component.literal("Right-click: upgrade").withStyle(ChatFormatting.DARK_GRAY));
+        desc.add(Component.literal("Shift+click: locate").withStyle(ChatFormatting.DARK_GRAY));
         return new MapElement(MapCategory.BUILDING, buildingCategory, buildType, desc, Optional.empty(),
-            null, minX, minX + sizeX, minZ, minZ + sizeZ, instanceBonus > 0, worldPosLong, isUpgrading);
+            null, minX, minX + sizeX, minZ, minZ + sizeZ, instanceBonus > 0, worldPosLong, centerPos.asLong(), isUpgrading);
     }
 
     @Override
@@ -282,8 +287,9 @@ public class TownMapWidget extends AbstractWidget {
         return switch (category) {
             case "jobs"        -> JOB_RGB;
             case "gardens"     -> GARDEN_RGB;
-            case "naturals"     -> NATURALS_RGB;
+            case "naturals"    -> NATURALS_RGB;
             case "town_center" -> TOWN_CENTER_RGB;
+            case "player"      -> PLAYER_RGB;
             default            -> BUILDING_RGB;
         };
     }
@@ -394,6 +400,10 @@ public class TownMapWidget extends AbstractWidget {
         if (isHovered()) {
             MapElement hit = getBuildingAt((int) mouseX, (int) mouseY);
             if (hit != null) {
+                if (button == 0 && Screen.hasShiftDown()) {
+                    PingRenderer.addPing(BlockPos.of(hit.centerPosLong()));
+                    return true;
+                }
                 if (button == 0 && onBuildingClicked != null) {
                     onBuildingClicked.accept(hit.worldPosLong(), hit.defId());
                     return true;
@@ -446,5 +456,5 @@ public class TownMapWidget extends AbstractWidget {
                                List<Component> description, Optional<TooltipComponent> productionTooltip,
                                List<String> footprint,
                                int minX, int maxX, int minZ, int maxZ,
-                               boolean hasOrientationBonus, long worldPosLong, boolean isUpgrading) {}
+                               boolean hasOrientationBonus, long worldPosLong, long centerPosLong, boolean isUpgrading) {}
 }

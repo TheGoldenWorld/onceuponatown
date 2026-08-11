@@ -2,11 +2,18 @@ package org.dawnoftime.onceuponatown;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityModelLayerRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.TooltipComponentCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.world.phys.Vec3;
+import org.dawnoftime.onceuponatown.client.renderer.PingRenderer;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.client.renderer.RenderType;
 import org.dawnoftime.onceuponatown.client.gui.tooltip.BuildingProductionTooltip;
@@ -16,7 +23,7 @@ import org.dawnoftime.onceuponatown.client.gui.tooltip.ItemAndTitleTooltip;
 import org.dawnoftime.onceuponatown.client.model.NpcModel;
 import org.dawnoftime.onceuponatown.client.renderer.NpcRenderer;
 import org.dawnoftime.onceuponatown.client.screen.TownHubScreen;
-import org.dawnoftime.onceuponatown.network.C2SAdvanceEraPacket;
+
 import org.dawnoftime.onceuponatown.network.C2SSelectEraPathPacket;
 import org.dawnoftime.onceuponatown.network.C2SBuyPacket;
 import org.dawnoftime.onceuponatown.network.C2SDepositPacket;
@@ -87,6 +94,18 @@ public class OuatFabricClient implements ClientModInitializer {
                 S2CLogEntryPacket packet = S2CLogEntryPacket.decode(buf);
                 S2CLogEntryPacket.Handler.handle(packet);
             });
+        ClientTickEvents.END_CLIENT_TICK.register(client -> PingRenderer.tick());
+        WorldRenderEvents.LAST.register(context -> {
+            com.mojang.blaze3d.vertex.PoseStack poseStack = context.matrixStack();
+            if (poseStack == null) return;
+            MultiBufferSource.BufferSource bufferSource = Minecraft.getInstance().renderBuffers().bufferSource();
+            float partialTick = context.tickDelta();
+            long gameTime = context.world().getGameTime();
+            Vec3 cam = context.camera().getPosition();
+            PingRenderer.render(poseStack, bufferSource, partialTick, gameTime, cam.x, cam.y, cam.z);
+            PingRenderer.flush(bufferSource);
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> PingRenderer.clearAll());
         TooltipComponentCallback.EVENT.register(component -> {
             if (component instanceof ItemAndTitleTooltip t) return new ClientItemAndTitleTooltip(t);
             if (component instanceof BuildingProductionTooltip t) return new ClientBuildingProductionTooltip(t);
@@ -106,11 +125,6 @@ public class OuatFabricClient implements ClientModInitializer {
             var buf = PacketByteBufs.create();
             new C2SUpgradeBuildingPacket(pos, worldPosLong).encode(buf);
             ClientPlayNetworking.send(C2SUpgradeBuildingPacket.ID, buf);
-        };
-        NetworkHelper.sendAdvanceEraPacket = (pos, pathId) -> {
-            var buf = PacketByteBufs.create();
-            new C2SAdvanceEraPacket(pos, pathId).encode(buf);
-            ClientPlayNetworking.send(C2SAdvanceEraPacket.ID, buf);
         };
         NetworkHelper.sendSelectEraPathPacket = (pos, pathId) -> {
             var buf = PacketByteBufs.create();

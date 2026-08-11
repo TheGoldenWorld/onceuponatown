@@ -6,6 +6,7 @@
   "icon_item": "minecraft:anvil",
 
   "weight_cap_increase": 10,
+  "max_upgrade_level": 3,
 
   "resource_cost": [
     { "item": "minecraft:oak_log", "amount": 64 },
@@ -16,9 +17,10 @@
   "required_buildings": [
     { "defId": "stone_breach", "count": 2 }
   ],
+
   "auto_upgrade_ids": ["settlement"],
 
-  "auto_build_sequence": [],
+  "unlocked_building_ids": ["carpenter", "brownfield"],
 
   "next_orientation": "forge"
 }

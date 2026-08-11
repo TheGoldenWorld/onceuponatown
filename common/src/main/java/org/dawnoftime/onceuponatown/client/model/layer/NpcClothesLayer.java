@@ -14,8 +14,11 @@ import java.util.Map;
 
 public class NpcClothesLayer<T extends Npc, M extends NpcModel<T>> extends RenderLayer<T, M> {
     private static final Map<String, ResourceLocation> CLOTHES_BY_JOB = Map.of(
+        "beekeeper",  new ResourceLocation(Ouat.MOD_ID, "textures/entity/npc/beekeeper_clothes.png"),
         "builder",    new ResourceLocation(Ouat.MOD_ID, "textures/entity/npc/builder_clothes.png"),
-        "lumberjack", new ResourceLocation(Ouat.MOD_ID, "textures/entity/npc/lumberjack_clothes.png")
+        "lumberjack", new ResourceLocation(Ouat.MOD_ID, "textures/entity/npc/lumberjack_clothes.png"),
+        "miner",      new ResourceLocation(Ouat.MOD_ID, "textures/entity/npc/miner_clothes.png"),
+        "shepherd",   new ResourceLocation(Ouat.MOD_ID, "textures/entity/npc/shepherd_clothes.png")
     );
 
     @SuppressWarnings("unchecked")

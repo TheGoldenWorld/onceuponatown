@@ -19,6 +19,10 @@
     {
       "item": "minecraft:cobblestone",
       "amount": 10
+    },
+    {
+      "item": "minecraft:white_bed",
+      "amount": 1
     }
 
   ],

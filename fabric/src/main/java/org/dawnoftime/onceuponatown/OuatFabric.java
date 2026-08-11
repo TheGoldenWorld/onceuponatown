@@ -13,16 +13,19 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
 import org.dawnoftime.onceuponatown.command.TownCommand;
+import org.dawnoftime.onceuponatown.datapack.BeekeeperConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuilderConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuildingDataHandler;
 import org.dawnoftime.onceuponatown.datapack.LumberjackConfigDataHandler;
+import org.dawnoftime.onceuponatown.datapack.MinerConfigDataHandler;
+import org.dawnoftime.onceuponatown.datapack.ShepherdConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuildingListDataHandler;
 import org.dawnoftime.onceuponatown.datapack.EraTransitionDataHandler;
 import org.dawnoftime.onceuponatown.datapack.FoodListDataHandler;
 import org.dawnoftime.onceuponatown.datapack.QuestDataHandler;
 import org.dawnoftime.onceuponatown.datapack.TradePriceDataHandler;
 import org.dawnoftime.onceuponatown.entity.Npc;
-import org.dawnoftime.onceuponatown.network.C2SAdvanceEraPacket;
+
 import org.dawnoftime.onceuponatown.network.C2SSelectEraPathPacket;
 import org.dawnoftime.onceuponatown.network.C2SBuyPacket;
 import org.dawnoftime.onceuponatown.network.C2SDepositPacket;
@@ -63,8 +66,11 @@ public class OuatFabric implements ModInitializer {
         FabricDefaultAttributeRegistry.register(EntityRegistry.NPC, Npc.createAttributes());
         CommandRegistrationCallback.EVENT.register((dispatcher, context, env) ->
             TownCommand.register(dispatcher, context));
+        ServerLifecycleEvents.SERVER_STARTING.register(BeekeeperConfigDataHandler::reload);
         ServerLifecycleEvents.SERVER_STARTING.register(BuilderConfigDataHandler::reload);
         ServerLifecycleEvents.SERVER_STARTING.register(LumberjackConfigDataHandler::reload);
+        ServerLifecycleEvents.SERVER_STARTING.register(MinerConfigDataHandler::reload);
+        ServerLifecycleEvents.SERVER_STARTING.register(ShepherdConfigDataHandler::reload);
         ServerLifecycleEvents.SERVER_STARTING.register(BuildingDataHandler::reload);
         ServerLifecycleEvents.SERVER_STARTING.register(BuildingListDataHandler::reload);
         ServerLifecycleEvents.SERVER_STARTING.register(EraTransitionDataHandler::reload);
@@ -91,11 +97,6 @@ public class OuatFabric implements ModInitializer {
             (server, player, handler, buf, responseSender) -> {
                 C2SUpgradeBuildingPacket packet = C2SUpgradeBuildingPacket.decode(buf);
                 server.execute(() -> C2SUpgradeBuildingPacket.Handler.handle(packet, player));
-            });
-        ServerPlayNetworking.registerGlobalReceiver(C2SAdvanceEraPacket.ID,
-            (server, player, handler, buf, responseSender) -> {
-                C2SAdvanceEraPacket packet = C2SAdvanceEraPacket.decode(buf);
-                server.execute(() -> C2SAdvanceEraPacket.Handler.handle(packet, player));
             });
         ServerPlayNetworking.registerGlobalReceiver(C2SDepositPacket.ID,
             (server, player, handler, buf, responseSender) -> {

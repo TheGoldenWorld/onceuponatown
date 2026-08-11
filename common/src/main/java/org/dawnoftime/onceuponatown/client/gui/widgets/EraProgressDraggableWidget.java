@@ -24,8 +24,6 @@ public class EraProgressDraggableWidget extends DraggableWidget {
     private static final int COLOR_CARD_BORDER = 0xFF55AA55;
     private static final int CARD_PADDING      = 8;
     private static final int BTN_H             = 12;
-    private static final int ADVANCE_BTN_H     = 14;
-    private static final int ADVANCE_BTN_GAP   = 6;
     private static final int GAP_BETWEEN_CARDS = 6;
     private static final int OUTER_PADDING     = 4;
 
@@ -57,22 +55,19 @@ public class EraProgressDraggableWidget extends DraggableWidget {
 
     private List<EraPathOption> pathOptions = new ArrayList<>();
     private String selectedPathId = null;
-    private final Consumer<String> onAdvance;
     private final Consumer<String> onSelectPath;
 
     private int contentHeight = 0;
     private final List<CardBounds> cardBounds = new ArrayList<>();
     private final List<int[]> selectBtnBounds = new ArrayList<>();
-    private int[] advanceBtnBounds = null;
 
     private record CardBounds(int x, int y, int w, int h, int cardIndex) {}
 
     public EraProgressDraggableWidget(int x, int y, int freeZoneMaxX, int screenH,
                                        int currentEra, List<EraPathOption> pathOptions,
-                                       Consumer<String> onAdvance, Consumer<String> onSelectPath) {
+                                       Consumer<String> onSelectPath) {
         super(x, y, computeWidgetW(pathOptions), TITLE_BAR_H + computeContentH(pathOptions), freeZoneMaxX, screenH);
         this.pathOptions = new ArrayList<>(pathOptions);
-        this.onAdvance = onAdvance;
         this.onSelectPath = onSelectPath;
         this.contentHeight = computeContentH(pathOptions);
         this.selectedPathId = ClientSessionState.selectedEraPathId;
@@ -164,7 +159,7 @@ public class EraProgressDraggableWidget extends DraggableWidget {
     private static int computeContentH(List<EraPathOption> options) {
         if (options.isEmpty()) return 30;
         int maxCardH = options.stream().mapToInt(EraProgressDraggableWidget::computeCardH).max().orElse(60);
-        return OUTER_PADDING + maxCardH + ADVANCE_BTN_GAP + ADVANCE_BTN_H + OUTER_PADDING;
+        return OUTER_PADDING + maxCardH + OUTER_PADDING;
     }
 
     // -------------------------------------------------------------------------
@@ -176,18 +171,6 @@ public class EraProgressDraggableWidget extends DraggableWidget {
 
     @Override
     protected boolean onTitleBarClick(double mouseX, double mouseY) {
-        return false;
-    }
-
-    private boolean getActivePrereqsMet() {
-        if (pathOptions.size() == 1) return pathOptions.get(0).prereqsMet();
-        if (selectedPathId != null) {
-            return pathOptions.stream()
-                .filter(p -> p.id().equals(selectedPathId))
-                .findFirst()
-                .map(EraPathOption::prereqsMet)
-                .orElse(false);
-        }
         return false;
     }
 
@@ -206,7 +189,6 @@ public class EraProgressDraggableWidget extends DraggableWidget {
 
         cardBounds.clear();
         selectBtnBounds.clear();
-        advanceBtnBounds = null;
 
         if (pathOptions.isEmpty()) {
             g.drawString(font, "No transitions available", cx + OUTER_PADDING, cy + 10, COLOR_DIM, false);
@@ -224,22 +206,6 @@ public class EraProgressDraggableWidget extends DraggableWidget {
             renderCard(g, font, xCursor, cy + OUTER_PADDING, cardW, maxCardH, mx, my, opt, ci, selected, multiPath);
             xCursor += cardW + GAP_BETWEEN_CARDS;
         }
-
-        // Advance Era button below the cards
-        int advBtnY = cy + OUTER_PADDING + maxCardH + ADVANCE_BTN_GAP;
-        int advBtnW = cw - OUTER_PADDING * 2;
-        int advBtnX = cx + OUTER_PADDING;
-        boolean canAdvance = getActivePrereqsMet();
-        boolean advHover = canAdvance && mx >= advBtnX && mx < advBtnX + advBtnW
-                && my >= advBtnY && my < advBtnY + ADVANCE_BTN_H;
-        int advBgColor = canAdvance ? (advHover ? 0xFF338833 : 0xFF225522) : 0xFF222222;
-        g.fill(advBtnX, advBtnY, advBtnX + advBtnW, advBtnY + ADVANCE_BTN_H, advBgColor);
-        String advText = "Advance Era";
-        g.drawString(font, advText,
-                advBtnX + (advBtnW - font.width(advText)) / 2,
-                advBtnY + (ADVANCE_BTN_H - 8) / 2,
-                canAdvance ? 0xFF88FF88 : 0xFF555555, false);
-        advanceBtnBounds = new int[]{ advBtnX, advBtnY, advBtnW, ADVANCE_BTN_H };
     }
 
     private void renderCard(GuiGraphics g, net.minecraft.client.gui.Font font,
@@ -330,20 +296,6 @@ public class EraProgressDraggableWidget extends DraggableWidget {
     @Override
     protected boolean contentMouseClicked(double mouseX, double mouseY, int button) {
         if (button != 0) return isMouseOver(mouseX, mouseY);
-
-        if (advanceBtnBounds != null) {
-            int[] b = advanceBtnBounds;
-            if (mouseX >= b[0] && mouseX < b[0] + b[2] && mouseY >= b[1] && mouseY < b[1] + b[3]) {
-                if (getActivePrereqsMet()) {
-                    if (pathOptions.size() == 1) {
-                        onAdvance.accept(pathOptions.get(0).id());
-                    } else if (selectedPathId != null) {
-                        onAdvance.accept(selectedPathId);
-                    }
-                }
-                return true;
-            }
-        }
 
         if (pathOptions.size() > 1) {
             for (int[] bb : selectBtnBounds) {

@@ -18,9 +18,10 @@
     { "defId": "leather_workshop", "count": 1 }
   ],
 
-  "auto_build_sequence": [{"defId": "cow_field", "count": 2}, "leather_workshop"],
-
+  "auto_build_sequence": [{"defId": "cow_field", "count": 2}, "leather_workshop", "carpenter"],
   "auto_upgrade_ids": ["settlement_2"],
+
+  "unlocked_building_ids": ["house_slot"],
 
   "next_orientation": "ranching"
 }

@@ -1,5 +1,6 @@
 package org.dawnoftime.onceuponatown.client.screen;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -19,6 +20,7 @@ import org.dawnoftime.onceuponatown.client.gui.widgets.DraggableWidget;
 import org.dawnoftime.onceuponatown.client.gui.widgets.EraProgressDraggableWidget;
 import org.dawnoftime.onceuponatown.client.gui.widgets.MapDraggableWidget;
 import org.dawnoftime.onceuponatown.client.gui.widgets.QuestHubWidget;
+import org.dawnoftime.onceuponatown.client.gui.widgets.SocialsWidget;
 import org.dawnoftime.onceuponatown.client.gui.widgets.TownSummaryWidget;
 import org.dawnoftime.onceuponatown.town.TownLogEntry;
 import org.dawnoftime.onceuponatown.network.NetworkHelper;
@@ -37,9 +39,9 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         new ResourceLocation(Ouat.MOD_ID, "textures/gui/town_construction.png");
     private static final ResourceLocation TEXTURE_UPGRADE =
         new ResourceLocation(Ouat.MOD_ID, "textures/gui/town_upgrade.png");
+    private static final ResourceLocation ICONS_TEXTURE =
+        new ResourceLocation(Ouat.MOD_ID, "textures/gui/icons.png");
 
-    private static final int COLOR_TAB_ACTIVE   = 0xFFD0C080;
-    private static final int COLOR_TAB_INACTIVE  = 0xFF807850;
 
     // Session-persistent widget layout (reset on Minecraft restart)
     private static int savedMapX = -1, savedMapY = -1;
@@ -51,6 +53,9 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
     private static int     savedQuestHubX    = -1;
     private static int     savedQuestHubY    = -1;
     private static boolean savedQuestHubOpen = true;
+    private static int     savedSocialsX     = -1;
+    private static int     savedSocialsY     = -1;
+    private static boolean savedSocialsOpen  = false;
     private static int savedActiveTab = 0;
     private static final List<String> savedWidgetOrder = new ArrayList<>();
 
@@ -70,6 +75,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
     private boolean summaryClosed = false;
     private boolean eraClosed = true;
     private boolean questHubClosed = false;
+    private boolean socialsClosed = true;
     private EraProgressDraggableWidget eraWidget = null;
     private QuestHubWidget questHubWidget = null;
     // Last autonomy preselection received from the server; null when none or cleared after era advance.
@@ -162,7 +168,6 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                 int startY = (savedEraY >= 0) ? savedEraY : centerY(this.height, DraggableWidget.TITLE_BAR_H + 80);
                 eraWidget = new EraProgressDraggableWidget(startX, startY, freeZoneW, this.height,
                     currentEra, eraTransitions,
-                    pathId -> NetworkHelper.sendAdvanceEraPacket.accept(anchorPos, pathId),
                     pathId -> NetworkHelper.sendSelectEraPathPacket.accept(anchorPos, pathId));
                 if (lastKnownAutonomyChosenTransitionId != null) {
                     eraWidget.applyServerPreselection(lastKnownAutonomyChosenTransitionId);
@@ -179,6 +184,13 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                     : centerY(this.height, questH);
                 questHubWidget = new QuestHubWidget(startX, startY, freeZoneW, this.height);
                 newWidgets.add(questHubWidget);
+            }
+            if (savedSocialsOpen) {
+                int socialsW = SocialsWidget.computeWidgetW();
+                int socialsH = SocialsWidget.computeWidgetH();
+                int startX = (savedSocialsX >= 0) ? Math.min(savedSocialsX, Math.max(0, freeZoneW - socialsW)) : centerX(freeZoneW, socialsW);
+                int startY = (savedSocialsY >= 0) ? Math.min(savedSocialsY, Math.max(0, this.height - socialsH)) : centerY(this.height, socialsH);
+                newWidgets.add(new SocialsWidget(startX, startY, freeZoneW, this.height));
             }
             if (!savedWidgetOrder.isEmpty()) {
                 newWidgets.sort((a, b) -> {
@@ -239,6 +251,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         hub.getList("BoostedBuildings", Tag.TAG_STRING).forEach(t -> boostedBuildingIds.add(t.getAsString()));
 
         stockTab.parseTradePrices(hub);
+        stockTab.applyStockData(hub.getCompound("StockSnapshot"), this.menu);
 
         upgradeBuildingsList.clear();
         hub.getList("UpgradeBuildings", Tag.TAG_COMPOUND).forEach(raw -> {
@@ -363,6 +376,11 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                     savedQuestHubOpen = false;
                     questHubWidget = null;
                 }
+                if (w instanceof SocialsWidget) {
+                    savedSocialsX    = w.getX();
+                    savedSocialsY    = w.getY();
+                    savedSocialsOpen = false;
+                }
             }
             return w.isClosed();
         });
@@ -370,6 +388,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         summaryClosed   = layer1Widgets.stream().noneMatch(w -> w instanceof TownSummaryWidget);
         eraClosed       = layer1Widgets.stream().noneMatch(w -> w instanceof EraProgressDraggableWidget);
         questHubClosed  = layer1Widgets.stream().noneMatch(w -> w instanceof QuestHubWidget);
+        socialsClosed   = layer1Widgets.stream().noneMatch(w -> w instanceof SocialsWidget);
 
         // Layer 1: left draggable widgets (Map, Summary, Era, QuestHub)
         for (int i = 0; i < layer1Widgets.size(); i++) {
@@ -385,6 +404,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         if (activeTab == 1 || activeTab == 2) {
             // Skip inventory slot rendering for non-stock tabs
             renderBg(guiGraphics, partialTick, mouseX, mouseY);
+            String tabKey = activeTab == 1 ? "onceuponatown.tab.construction" : "onceuponatown.tab.upgrade";
+            guiGraphics.drawString(this.font, Component.translatable(tabKey), leftPos + 8, topPos + 6, 0x404040, false);
         } else {
             super.render(guiGraphics, mouseX, mouseY, partialTick);
             stockTab.render(guiGraphics, leftPos, topPos, mouseX, mouseY, buildTabContext(), this.menu);
@@ -434,7 +455,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
             stockSnapshot.put(key, stockTag.getInt(key));
         }
         if (cachedHubData != null) cachedHubData.put("StockSnapshot", stockTag);
-        this.menu.rebuildFromStock(stockTag);
+        stockTab.applyStockData(stockTag, this.menu);
         refreshEraWidgetFromStock();
     }
 
@@ -594,23 +615,25 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
     }
 
     private void renderTabs(GuiGraphics g, int mx, int my) {
-        int btnX = leftPos - 16;
-        int[] tabYs = { topPos + 20, topPos + 46, topPos + 72 };
-        int btnW = 14, btnH = 24;
-
-        for (int i = 0; i < 3; i++) {
-            int btnY = tabYs[i];
-            g.fill(btnX, btnY, btnX + btnW, btnY + btnH, activeTab == i ? COLOR_TAB_ACTIVE : COLOR_TAB_INACTIVE);
+        int btnX = leftPos - 14;
+        ResourceLocation[] tex  = { TEXTURE, TEXTURE_CONSTRUCTION, TEXTURE_UPGRADE };
+        int[] uvV  = { 75, 19,  1 };
+        int[] tabY = { 20, 40, 60 }; // 4px overlap between tabs
+        // render back-to-front so the active tab always draws on top
+        int[][] renderOrder = { { 2, 1, 0 }, { 2, 0, 1 }, { 1, 0, 2 } };
+        for (int i : renderOrder[activeTab]) {
+            g.blit(tex[i], btnX, topPos + tabY[i], 177, uvV[i], 14, 24);
         }
-
-        drawChestIcon(g, btnX + 2, tabYs[0] + 8);
-        drawHouseIcon(g, btnX + 2, tabYs[1] + 8);
-        drawUpArrowIcon(g, btnX + 3, tabYs[2] + 8);
     }
 
     @Override
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        // Texture has no title bar
+        String tabKey = switch (activeTab) {
+            case 1  -> "onceuponatown.tab.construction";
+            case 2  -> "onceuponatown.tab.upgrade";
+            default -> "onceuponatown.tab.stock";
+        };
+        guiGraphics.drawString(this.font, Component.translatable(tabKey), 8, 6, 0x404040, false);
     }
 
     @Override
@@ -634,6 +657,10 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                 savedQuestHubX = w.getX();
                 savedQuestHubY = w.getY();
                 savedWidgetOrder.add(w.getClass().getSimpleName());
+            } else if (w instanceof SocialsWidget) {
+                savedSocialsX = w.getX();
+                savedSocialsY = w.getY();
+                savedWidgetOrder.add(w.getClass().getSimpleName());
             }
         }
         super.onClose();
@@ -651,26 +678,23 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         if (button == 0 && cachedHubData != null) {
             int btnX = leftPos - 18;
             int btnY = topPos + imageHeight - 16;
-            if (mapClosed) {
-                if (mX >= btnX && mX < btnX + 14 && mY >= btnY && mY < btnY + 14) {
+            // Click order matches render order (bottom to top): Socials, Info, Quest, Map, Era
+            if (socialsClosed) {
+                if (mX >= btnX && mX < btnX + 16 && mY >= btnY && mY < btnY + 16) {
                     int freeZoneW = this.leftPos;
-                    int startX = (savedMapX >= 0) ? savedMapX : centerX(freeZoneW, mapInitialHeight);
-                    int startY = (savedMapY >= 0) ? savedMapY : centerY(this.height, mapInitialHeight);
-                    MapDraggableWidget reopenedMap = new MapDraggableWidget(startX, startY, Math.min(160, freeZoneW - 20), mapInitialHeight, freeZoneW, this.height, cachedHubData.getCompound("MapData"));
-                    reopenedMap.setOnBuildingClicked((pos, defId) -> {
-                        activeTab = 1;
-                        constructionTab.selectBuilding(defId, leftPos, topPos, upgradeBuildingsList);
-                    });
-                    reopenedMap.setOnBuildingRightClicked(pos -> { activeTab = 2; upgradeTab.setSelectedBuilding(pos); });
-                    layer1Widgets.add(0, reopenedMap);
-                    savedMapOpen = true;
-                    mapClosed = false;
+                    int socialsW = SocialsWidget.computeWidgetW();
+                    int socialsH = SocialsWidget.computeWidgetH();
+                    int startX = (savedSocialsX >= 0) ? Math.min(savedSocialsX, Math.max(0, freeZoneW - socialsW)) : centerX(freeZoneW, socialsW);
+                    int startY = (savedSocialsY >= 0) ? Math.min(savedSocialsY, Math.max(0, this.height - socialsH)) : centerY(this.height, socialsH);
+                    layer1Widgets.add(0, new SocialsWidget(startX, startY, freeZoneW, this.height));
+                    savedSocialsOpen = true;
+                    socialsClosed = false;
                     return true;
                 }
                 btnY -= 18;
             }
             if (summaryClosed && cachedHubData.contains("SummaryData")) {
-                if (mX >= btnX && mX < btnX + 14 && mY >= btnY && mY < btnY + 14) {
+                if (mX >= btnX && mX < btnX + 16 && mY >= btnY && mY < btnY + 16) {
                     int freeZoneW = this.leftPos;
                     int summaryH = DraggableWidget.TITLE_BAR_H + TownSummaryWidget.VISIBLE_H;
                     int startX = (savedSummaryX >= 0) ? savedSummaryX : centerX(freeZoneW, TownSummaryWidget.WIDGET_W);
@@ -687,27 +711,8 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                 }
                 btnY -= 18;
             }
-            if (eraClosed) {
-                if (mX >= btnX && mX < btnX + 14 && mY >= btnY && mY < btnY + 14) {
-                    int freeZoneW = this.leftPos;
-                    int startX = (savedEraX >= 0) ? savedEraX : centerX(freeZoneW, EraProgressDraggableWidget.computeWidgetW(eraTransitions));
-                    int startY = (savedEraY >= 0) ? savedEraY : centerY(this.height, DraggableWidget.TITLE_BAR_H + 80);
-                    eraWidget = new EraProgressDraggableWidget(startX, startY, freeZoneW, this.height,
-                        currentEra, eraTransitions,
-                        pathId -> NetworkHelper.sendAdvanceEraPacket.accept(anchorPos, pathId),
-                        pathId -> NetworkHelper.sendSelectEraPathPacket.accept(anchorPos, pathId));
-                    if (lastKnownAutonomyChosenTransitionId != null) {
-                        eraWidget.applyServerPreselection(lastKnownAutonomyChosenTransitionId);
-                    }
-                    layer1Widgets.add(0, eraWidget);
-                    savedEraOpen = true;
-                    eraClosed = false;
-                    return true;
-                }
-                btnY -= 18;
-            }
             if (questHubClosed) {
-                if (mX >= btnX && mX < btnX + 14 && mY >= btnY && mY < btnY + 14) {
+                if (mX >= btnX && mX < btnX + 16 && mY >= btnY && mY < btnY + 16) {
                     int freeZoneW = this.leftPos;
                     int questH = DraggableWidget.TITLE_BAR_H + QuestHubWidget.VISIBLE_H;
                     int startX = (savedQuestHubX >= 0)
@@ -727,15 +732,52 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
                     questHubClosed = false;
                     return true;
                 }
+                btnY -= 18;
+            }
+            if (mapClosed) {
+                if (mX >= btnX && mX < btnX + 16 && mY >= btnY && mY < btnY + 16) {
+                    int freeZoneW = this.leftPos;
+                    int startX = (savedMapX >= 0) ? savedMapX : centerX(freeZoneW, mapInitialHeight);
+                    int startY = (savedMapY >= 0) ? savedMapY : centerY(this.height, mapInitialHeight);
+                    MapDraggableWidget reopenedMap = new MapDraggableWidget(startX, startY, Math.min(160, freeZoneW - 20), mapInitialHeight, freeZoneW, this.height, cachedHubData.getCompound("MapData"));
+                    reopenedMap.setOnBuildingClicked((pos, defId) -> {
+                        activeTab = 1;
+                        constructionTab.selectBuilding(defId, leftPos, topPos, upgradeBuildingsList);
+                    });
+                    reopenedMap.setOnBuildingRightClicked(pos -> { activeTab = 2; upgradeTab.setSelectedBuilding(pos); });
+                    layer1Widgets.add(0, reopenedMap);
+                    savedMapOpen = true;
+                    mapClosed = false;
+                    return true;
+                }
+                btnY -= 18;
+            }
+            if (eraClosed) {
+                if (mX >= btnX && mX < btnX + 16 && mY >= btnY && mY < btnY + 16) {
+                    int freeZoneW = this.leftPos;
+                    int startX = (savedEraX >= 0) ? savedEraX : centerX(freeZoneW, EraProgressDraggableWidget.computeWidgetW(eraTransitions));
+                    int startY = (savedEraY >= 0) ? savedEraY : centerY(this.height, DraggableWidget.TITLE_BAR_H + 80);
+                    eraWidget = new EraProgressDraggableWidget(startX, startY, freeZoneW, this.height,
+                        currentEra, eraTransitions,
+                        pathId -> NetworkHelper.sendSelectEraPathPacket.accept(anchorPos, pathId));
+                    if (lastKnownAutonomyChosenTransitionId != null) {
+                        eraWidget.applyServerPreselection(lastKnownAutonomyChosenTransitionId);
+                    }
+                    layer1Widgets.add(0, eraWidget);
+                    savedEraOpen = true;
+                    eraClosed = false;
+                    return true;
+                }
             }
         }
 
-        // Tab switching (vertical left-side tabs)
-        int tabBtnX = leftPos - 16;
-        int[] tabBtnYs = { topPos + 20, topPos + 46, topPos + 72 };
+        // Tab switching -- check front-to-back so the visually top tab wins in overlap zones
+        int tabBtnX = leftPos - 14;
+        int[] tabY = { 20, 40, 60 };
+        int[][] clickOrder = { { 0, 1, 2 }, { 1, 0, 2 }, { 2, 0, 1 } };
         if (mX >= tabBtnX && mX < tabBtnX + 14) {
-            for (int i = 0; i < 3; i++) {
-                if (mY >= tabBtnYs[i] && mY < tabBtnYs[i] + 24) {
+            for (int i : clickOrder[activeTab]) {
+                if (mY >= topPos + tabY[i] && mY < topPos + tabY[i] + 24) {
                     if (i == 0 && activeTab != 0) {
                         constructionTab.onTabLeave();
                         stockTab.onTabEnter(anchorPos);
@@ -786,6 +828,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         for (int i = layer1Widgets.size() - 1; i >= 0; i--) {
             if (layer1Widgets.get(i).mouseDragged(mX, mY, button, dX, dY)) return true;
         }
+        if (activeTab == 0) return stockTab.handleDrag(mY, this.menu);
         if (activeTab == 1) return constructionTab.handleDrag(mX, mY, button, dX, dY);
         if (activeTab == 2) return true;
         return super.mouseDragged(mX, mY, button, dX, dY);
@@ -799,6 +842,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         for (DraggableWidget w : layer1Widgets) {
             if (w.mouseReleased(mX, mY, button)) return true;
         }
+        if (activeTab == 0) { stockTab.handleRelease(); }
         if (activeTab == 1) return constructionTab.handleRelease(mX, mY, button);
         if (activeTab == 2) return true;
         return super.mouseReleased(mX, mY, button);
@@ -813,6 +857,7 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
         for (int i = layer1Widgets.size() - 1; i >= 0; i--) {
             if (layer1Widgets.get(i).mouseScrolled(mX, mY, delta)) return true;
         }
+        if (activeTab == 0) return stockTab.handleScroll(delta, this.menu);
         if (activeTab == 1) return constructionTab.handleScroll(mX, mY, delta);
         if (activeTab == 2) return upgradeTab.handleScroll(mX, mY, delta, buildTabContext());
         return super.mouseScrolled(mX, mY, delta);
@@ -931,6 +976,26 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
 
     @Override
     protected void renderTooltip(GuiGraphics g, int mx, int my) {
+        if (activeTab == 0 && stockTab.isArrowHovered(mx, my, leftPos, topPos)) {
+            g.renderTooltip(this.font, Component.translatable("onceuponatown.tooltip.send"), mx, my);
+            return;
+        }
+        if (activeTab == 0 && stockTab.isModeToggleHovered(mx, my, leftPos, topPos)) {
+            java.util.List<net.minecraft.network.chat.Component> lines = new java.util.ArrayList<>();
+            if (stockTab.isBuyMode()) {
+                lines.add(Component.translatable("onceuponatown.tooltip.mode_buy_title"));
+                lines.add(Component.translatable("onceuponatown.tooltip.mode_buy_desc")
+                        .withStyle(net.minecraft.ChatFormatting.GRAY));
+            } else {
+                lines.add(Component.translatable("onceuponatown.tooltip.mode_sell_title"));
+                lines.add(Component.translatable("onceuponatown.tooltip.mode_sell_desc")
+                        .withStyle(net.minecraft.ChatFormatting.GRAY));
+                lines.add(Component.translatable("onceuponatown.tooltip.mode_sell_note")
+                        .withStyle(net.minecraft.ChatFormatting.DARK_GRAY, net.minecraft.ChatFormatting.ITALIC));
+            }
+            g.renderComponentTooltip(this.font, lines, mx, my);
+            return;
+        }
         if (activeTab == 0
                 && stockTab.renderTradePriceTooltip(g, mx, my, this.hoveredSlot, leftPos, topPos, this.font)) {
             return;
@@ -940,88 +1005,40 @@ public class TownHubScreen extends AbstractContainerScreen<TownHubMenu> {
 
     private void renderReopenButtons(GuiGraphics g, int mx, int my) {
         if (cachedHubData == null) return;
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
         int btnX = leftPos - 18;
         int btnY = topPos + imageHeight - 16;
-        if (mapClosed) {
-            boolean hover = mx >= btnX && mx < btnX + 14 && my >= btnY && my < btnY + 14;
-            g.fill(btnX, btnY, btnX + 14, btnY + 14, hover ? 0xFF555555 : 0xFF333333);
-            drawHouseIcon(g, btnX + 2, btnY + 3);
+        // Order bottom to top: Socials, Info, Quest, Map, Era
+        if (socialsClosed) {
+            boolean hover = mx >= btnX && mx < btnX + 16 && my >= btnY && my < btnY + 16;
+            if (hover) g.fill(btnX, btnY, btnX + 16, btnY + 16, 0x30FFFFFF);
+            g.blit(ICONS_TEXTURE, btnX, btnY, 16, 16, 32f, 16f, 16, 16, 64, 64);
             btnY -= 18;
         }
         if (summaryClosed && cachedHubData.contains("SummaryData")) {
-            boolean hover = mx >= btnX && mx < btnX + 14 && my >= btnY && my < btnY + 14;
-            g.fill(btnX, btnY, btnX + 14, btnY + 14, hover ? 0xFF555555 : 0xFF333333);
-            drawInfoIcon(g, btnX + 2, btnY + 2);
-            btnY -= 18;
-        }
-        if (eraClosed) {
-            boolean hover = mx >= btnX && mx < btnX + 14 && my >= btnY && my < btnY + 14;
-            g.fill(btnX, btnY, btnX + 14, btnY + 14, hover ? 0xFF555555 : 0xFF333333);
-            drawEraIcon(g, btnX + 2, btnY + 2);
+            boolean hover = mx >= btnX && mx < btnX + 16 && my >= btnY && my < btnY + 16;
+            if (hover) g.fill(btnX, btnY, btnX + 16, btnY + 16, 0x30FFFFFF);
+            g.blit(ICONS_TEXTURE, btnX, btnY, 16, 16, 0f, 16f, 16, 16, 64, 64);
             btnY -= 18;
         }
         if (questHubClosed) {
-            boolean hover = mx >= btnX && mx < btnX + 14 && my >= btnY && my < btnY + 14;
-            g.fill(btnX, btnY, btnX + 14, btnY + 14, hover ? 0xFF555555 : 0xFF333333);
-            g.drawString(Minecraft.getInstance().font, "Q", btnX + 4, btnY + 3, 0xFFFFFFFF, false);
+            boolean hover = mx >= btnX && mx < btnX + 16 && my >= btnY && my < btnY + 16;
+            if (hover) g.fill(btnX, btnY, btnX + 16, btnY + 16, 0x30FFFFFF);
+            g.blit(ICONS_TEXTURE, btnX, btnY, 16, 16, 16f, 0f, 16, 16, 64, 64);
+            btnY -= 18;
         }
-    }
-
-    // Pixel-art house icon (10x7 px)
-    private static void drawHouseIcon(GuiGraphics g, int bx, int by) {
-        int c = 0xFFFFFFFF;
-        g.fill(bx + 4, by,     bx + 6, by + 1, c); // row 0: roof peak
-        g.fill(bx + 3, by + 1, bx + 7, by + 2, c); // row 1
-        g.fill(bx + 2, by + 2, bx + 8, by + 3, c); // row 2
-        g.fill(bx + 1, by + 3, bx + 9, by + 4, c); // row 3: roof base
-        g.fill(bx + 2, by + 4, bx + 4, by + 5, c); // row 4: left wall
-        g.fill(bx + 6, by + 4, bx + 8, by + 5, c); // row 4: right wall
-        g.fill(bx + 2, by + 5, bx + 4, by + 6, c); // row 5: left wall
-        g.fill(bx + 6, by + 5, bx + 8, by + 6, c); // row 5: right wall
-        g.fill(bx + 2, by + 6, bx + 8, by + 7, c); // row 6: floor
-    }
-
-    // Pixel-art info 'i' icon (2x5 px)
-    private static void drawInfoIcon(GuiGraphics g, int bx, int by) {
-        int c = 0xFFFFFFFF;
-        g.fill(bx + 2, by,     bx + 8, by + 1, c); // top serif
-        g.fill(bx + 4, by + 1, bx + 6, by + 6, c); // stem
-        g.fill(bx + 2, by + 6, bx + 8, by + 7, c); // bottom serif
-    }
-
-    // Pixel-art star/era icon (5x5 core)
-    private static void drawEraIcon(GuiGraphics g, int bx, int by) {
-        int c = 0xFFFFDD44;
-        g.fill(bx + 4, by,     bx + 6, by + 3, c); // top arm
-        g.fill(bx + 4, by + 7, bx + 6, by + 10, c); // bottom arm
-        g.fill(bx,     by + 4, bx + 3, by + 6, c); // left arm
-        g.fill(bx + 7, by + 4, bx + 10, by + 6, c); // right arm
-        g.fill(bx + 3, by + 3, bx + 7, by + 7, c); // center
-    }
-
-    // Pixel-art chest icon (10x9 px)
-    private static void drawChestIcon(GuiGraphics g, int bx, int by) {
-        int c = 0xFFFFFFFF;
-        g.fill(bx,     by,     bx + 10, by + 1,  c); // lid top
-        g.fill(bx,     by + 1, bx + 1,  by + 4,  c); // lid left
-        g.fill(bx + 9, by + 1, bx + 10, by + 4,  c); // lid right
-        g.fill(bx + 1, by + 3, bx + 9,  by + 4,  c); // lid bottom
-        g.fill(bx + 4, by + 2, bx + 6,  by + 3,  c); // lid latch
-        g.fill(bx,     by + 4, bx + 10, by + 5,  c); // body top
-        g.fill(bx,     by + 5, bx + 1,  by + 9,  c); // body left
-        g.fill(bx + 9, by + 5, bx + 10, by + 9,  c); // body right
-        g.fill(bx,     by + 8, bx + 10, by + 9,  c); // body bottom
-        g.fill(bx + 4, by + 6, bx + 6,  by + 7,  c); // body latch
-    }
-
-    // Pixel-art up-arrow icon (8x8 px)
-    private static void drawUpArrowIcon(GuiGraphics g, int bx, int by) {
-        int c = 0xFFFFFFFF;
-        g.fill(bx + 3, by,     bx + 5, by + 1, c); // tip
-        g.fill(bx + 2, by + 1, bx + 6, by + 2, c); // row 1
-        g.fill(bx + 1, by + 2, bx + 7, by + 3, c); // row 2
-        g.fill(bx,     by + 3, bx + 8, by + 4, c); // arrowhead base
-        g.fill(bx + 3, by + 4, bx + 5, by + 8, c); // shaft
+        if (mapClosed) {
+            boolean hover = mx >= btnX && mx < btnX + 16 && my >= btnY && my < btnY + 16;
+            if (hover) g.fill(btnX, btnY, btnX + 16, btnY + 16, 0x30FFFFFF);
+            g.blit(ICONS_TEXTURE, btnX, btnY, 16, 16, 32f, 0f, 16, 16, 64, 64);
+            btnY -= 18;
+        }
+        if (eraClosed) {
+            boolean hover = mx >= btnX && mx < btnX + 16 && my >= btnY && my < btnY + 16;
+            if (hover) g.fill(btnX, btnY, btnX + 16, btnY + 16, 0x30FFFFFF);
+            g.blit(ICONS_TEXTURE, btnX, btnY, 16, 16, 16f, 16f, 16, 16, 64, 64);
+        }
     }
 
     private TownHubTypes.TownHubTabContext buildTabContext() {

@@ -2,16 +2,12 @@ package org.dawnoftime.onceuponatown.entity.ai.lumberjack;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import org.dawnoftime.onceuponatown.building.schematic.SchematicBlock;
@@ -19,8 +15,10 @@ import org.dawnoftime.onceuponatown.building.schematic.SchematicReader;
 import org.dawnoftime.onceuponatown.datapack.BuildingDataHandler;
 import org.dawnoftime.onceuponatown.datapack.LumberjackConfigDataHandler;
 import org.dawnoftime.onceuponatown.entity.Npc;
-import org.dawnoftime.onceuponatown.entity.ai.NpcJob;
-import org.dawnoftime.onceuponatown.entity.ai.shared.GoToPosition;
+import org.dawnoftime.onceuponatown.entity.ai.AbstractNpcJob;
+import org.dawnoftime.onceuponatown.entity.ai.shared.BuildingBlockController;
+import org.dawnoftime.onceuponatown.entity.ai.shared.NpcSleepController;
+import org.dawnoftime.onceuponatown.entity.ai.shared.SecondaryActivityController;
 import org.dawnoftime.onceuponatown.town.BuildingDef;
 import org.dawnoftime.onceuponatown.town.PlacedBuilding;
 import org.dawnoftime.onceuponatown.town.Town;
@@ -30,36 +28,49 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-public class LumberjackJob implements NpcJob {
+public class LumberjackJob extends AbstractNpcJob {
 
     private static final int SCAN_Y_EXTENSION = 16;
     private static final Set<Block> LOG_BLOCKS = Set.of(
         Blocks.OAK_LOG,    Blocks.SPRUCE_LOG, Blocks.BIRCH_LOG,
         Blocks.JUNGLE_LOG, Blocks.ACACIA_LOG, Blocks.DARK_OAK_LOG,
-        Blocks.OAK_WOOD,   Blocks.STRIPPED_OAK_LOG
+        Blocks.OAK_WOOD,   Blocks.STRIPPED_OAK_LOG,
+        Blocks.BEE_NEST
     );
     private static final Set<Block> SAPLING_BLOCKS = Set.of(
         Blocks.OAK_SAPLING,    Blocks.SPRUCE_SAPLING, Blocks.BIRCH_SAPLING,
         Blocks.JUNGLE_SAPLING, Blocks.ACACIA_SAPLING, Blocks.DARK_OAK_SAPLING
     );
 
-    private enum State { IDLE, TRAVELING, CHOPPING, PLANTING, SLEEPING }
+    private enum State { IDLE, CHOPPING, PLANTING, SLEEPING, ACTIVITY }
 
-    private final Npc npc;
     private State current = State.IDLE;
-    private int buildingCursor = 0;
-    private PlacedBuilding currentBuilding = null;
-    private GoToPosition navigation = null;
     private List<BlockPos> chopList = new ArrayList<>();
     private int chopCursor = 0;
     private int chopTickCounter = 0;
 
-    // Sleep state fields -- reset to null whenever SLEEPING is exited.
-    private BlockPos sleepBedPos = null;
-    private GoToPosition sleepGoTo = null;
+    private final BuildingBlockController workController;
+    private final BuildingBlockController.BlockScanner workScanner;
+    private final SecondaryActivityController activityController = new SecondaryActivityController();
 
     public LumberjackJob(Npc npc) {
-        this.npc = npc;
+        super(npc);
+        this.workController = new BuildingBlockController(npc, 3.0, 2.0);
+        // Scanner: find logs in the building; if found, populate chopList and return
+        // the building center so the controller skips APPROACHING (lumberjack works from center).
+        this.workScanner = (level, building) -> {
+            List<BlockPos> logs = scanLogs(level, building.bb);
+            if (logs.isEmpty()) return null;
+            chopList = logs;
+            chopCursor = 0;
+            chopTickCounter = 0;
+            npc.holdInMainHand(new ItemStack(Items.WOODEN_AXE));
+            return new BlockPos(
+                (building.bb.minX() + building.bb.maxX()) / 2,
+                building.bb.minY(),
+                (building.bb.minZ() + building.bb.maxZ()) / 2
+            );
+        };
     }
 
     @Override
@@ -75,76 +86,38 @@ public class LumberjackJob implements NpcJob {
 
         long dayTime = level.getDayTime() % 24000;
 
-        // After a server restart, the entity's sleeping pose is reloaded from NBT but the
-        // job state machine resets to IDLE. Resync: if the NPC is still in bed and it is
-        // still sleep time, switch to SLEEPING and restore the bed position from the entity.
-        // If it is no longer sleep time, clear the bed pose so the NPC stands up normally.
-        if (npc.isSleeping() && current != State.SLEEPING) {
-            if (cfg.bedtime >= 0 && isSleepTime(dayTime, cfg)) {
-                current = State.SLEEPING;
-                sleepBedPos = npc.getSleepingPos().orElse(null);
-            } else {
-                npc.stopSleeping();
-            }
-        }
-
-        // Trigger sleep from any active state when bedtime is reached.
-        if (cfg.bedtime >= 0 && current != State.SLEEPING && isSleepTime(dayTime, cfg)) {
-            enterSleep();
-        }
+        NpcSleepController.SleepCheck sc = sleepController.checkTick(dayTime, cfg, current == State.SLEEPING);
+        if (sc == NpcSleepController.SleepCheck.RESYNC)   current = State.SLEEPING;
+        if (sc == NpcSleepController.SleepCheck.TRIGGER)  enterSleep();
 
         switch (current) {
-            case IDLE      -> tickIdle(level, town, cfg);
-            case TRAVELING -> tickTraveling(level, town, cfg);
+            case IDLE -> {
+                if (!hasAvailableLogs(level, town, cfg)) {
+                    workController.reset();
+                    if (activityController.tryStart(town, npc, cfg.secondaryActivities)) {
+                        current = State.ACTIVITY;
+                    } else {
+                        maybeWander();
+                    }
+                } else {
+                    BuildingBlockController.Result r = workController.tick(level, town, cfg, workScanner);
+                    if (r == BuildingBlockController.Result.PERFORMING) {
+                        current = State.CHOPPING;
+                    }
+                }
+            }
             case CHOPPING  -> tickChopping(level, town, cfg);
             case PLANTING  -> tickPlanting(level, town, cfg);
             case SLEEPING  -> tickSleeping(level, town, cfg);
-        }
-    }
-
-    private void tickIdle(ServerLevel level, Town town, LumberjackConfigDataHandler.Config cfg) {
-        List<PlacedBuilding> eligible = getEligible(town, cfg);
-        if (eligible.isEmpty()) { maybeWander(); return; }
-
-        int size = eligible.size();
-        for (int i = 0; i < size; i++) {
-            int idx = (buildingCursor + i) % size;
-            PlacedBuilding building = eligible.get(idx);
-            if (building.bb == null) continue;
-            List<BlockPos> logs = scanLogs(level, building.bb);
-            if (!logs.isEmpty()) {
-                currentBuilding = building;
-                buildingCursor = idx;
-                npc.holdInMainHand(new ItemStack(Items.WOODEN_AXE));
-                BlockPos center = new BlockPos(
-                    (building.bb.minX() + building.bb.maxX()) / 2,
-                    building.bb.minY(),
-                    (building.bb.minZ() + building.bb.maxZ()) / 2
-                );
-                navigation = new GoToPosition(npc, center, cfg.walkSpeed, 3.0);
-                current = State.TRAVELING;
-                return;
+            case ACTIVITY  -> {
+                if (hasAvailableLogs(level, town, cfg)) {
+                    activityController.cancel(npc);
+                    current = State.IDLE;
+                } else {
+                    SecondaryActivityController.Result r = activityController.tick(level, town, npc, cfg.walkSpeed);
+                    if (r == SecondaryActivityController.Result.NOT_FOUND) current = State.IDLE;
+                }
             }
-        }
-        maybeWander();
-    }
-
-    private void tickTraveling(ServerLevel level, Town town, LumberjackConfigDataHandler.Config cfg) {
-        if (navigation != null && !navigation.tick()) return;
-        navigation = null;
-        if (currentBuilding == null || currentBuilding.bb == null) {
-            current = State.IDLE;
-            return;
-        }
-        List<BlockPos> logs = scanLogs(level, currentBuilding.bb);
-        if (!logs.isEmpty()) {
-            chopList = logs;
-            chopCursor = 0;
-            chopTickCounter = 0;
-            current = State.CHOPPING;
-        } else {
-            advanceCursor(town, cfg);
-            current = State.IDLE;
         }
     }
 
@@ -174,119 +147,49 @@ public class LumberjackJob implements NpcJob {
     }
 
     private void tickPlanting(ServerLevel level, Town town, LumberjackConfigDataHandler.Config cfg) {
-        if (currentBuilding != null) {
-            Optional<BuildingDef> defOpt = BuildingDataHandler.get(currentBuilding.defId);
+        PlacedBuilding building = workController.getCurrentBuilding();
+        if (building != null) {
+            Optional<BuildingDef> defOpt = BuildingDataHandler.get(building.defId);
             if (defOpt.isPresent()) {
                 Optional<StructureTemplate> templateOpt = level.getStructureManager().get(defOpt.get().nbt);
                 if (templateOpt.isPresent()) {
-                    List<SchematicBlock> blocks = SchematicReader.readSortedBlocks(templateOpt.get(), currentBuilding.rotation);
+                    List<SchematicBlock> blocks = SchematicReader.readSortedBlocks(templateOpt.get(), building.rotation);
                     for (SchematicBlock b : blocks) {
                         if (SAPLING_BLOCKS.contains(b.state().getBlock())) {
-                            level.setBlock(currentBuilding.worldPos.offset(b.localPos()), b.state(), Block.UPDATE_ALL);
+                            level.setBlock(building.worldPos.offset(b.localPos()), b.state(), Block.UPDATE_ALL);
                         }
                     }
                 }
             }
         }
-        advanceCursor(town, cfg);
+        workController.advanceCursor(town, cfg);
         current = State.IDLE;
-    }
-
-    private void maybeWander() {
-        if (!npc.getNavigation().isDone()) return;
-        Vec3 target = DefaultRandomPos.getPos(npc, 10, 7);
-        if (target != null) npc.getNavigation().moveTo(target.x, target.y, target.z, 0.4);
-    }
-
-    // Returns true when the current daytime falls inside the configured sleep window.
-    // Handles midnight wrap-around: e.g., bedtime=13000 wakeup=1000 means night wraps past 0.
-    private boolean isSleepTime(long dayTime, LumberjackConfigDataHandler.Config cfg) {
-        int sleep = cfg.bedtime;
-        int wake  = cfg.wakeupTime;
-        if (sleep > wake) {
-            return dayTime >= sleep || dayTime < wake;
-        } else {
-            return dayTime >= sleep && dayTime < wake;
-        }
     }
 
     // Interrupts whatever the NPC was doing and switches to the SLEEPING state.
     private void enterSleep() {
+        if (current == State.ACTIVITY) activityController.cancel(npc);
         npc.getNavigation().stop();
         npc.freeHands();
-        sleepBedPos = null;
-        sleepGoTo   = null;
-        current     = State.SLEEPING;
+        workController.reset();
+        sleepController.reset();
+        current = State.SLEEPING;
     }
 
-    // Drives the full sleep lifecycle: walk to bed -> sleep -> wake up.
     private void tickSleeping(ServerLevel level, Town town, LumberjackConfigDataHandler.Config cfg) {
-        long dayTime = level.getDayTime() % 24000;
-
-        if (!isSleepTime(dayTime, cfg)) {
-            if (npc.isSleeping()) npc.stopSleeping();
-            sleepBedPos = null;
-            sleepGoTo   = null;
-            current     = State.IDLE;
-            return;
-        }
-
-        if (npc.isSleeping()) return;
-
-        if (sleepBedPos == null) {
-            sleepBedPos = findRestBed(level, town, cfg);
-            if (sleepBedPos == null) return;
-        }
-
-        if (sleepGoTo == null) {
-            sleepGoTo = new GoToPosition(npc, sleepBedPos, cfg.walkSpeed, 2.0);
-        }
-
-        if (sleepGoTo.tick()) {
-            sleepGoTo = null;
-            npc.startSleeping(sleepBedPos);
+        if (!sleepController.tick(level, town, cfg)) {
+            current = State.IDLE;
         }
     }
 
-    // Finds the first BedBlock HEAD in any building listed in cfg.restBuildings.
-    private BlockPos findRestBed(ServerLevel level, Town town, LumberjackConfigDataHandler.Config cfg) {
+    // Returns true if any woodSourceBuilding in the town currently contains at least one log block.
+    private boolean hasAvailableLogs(ServerLevel level, Town town, LumberjackConfigDataHandler.Config cfg) {
         for (PlacedBuilding building : town.getBuildings()) {
-            if (!cfg.restBuildings.contains(building.defId)) continue;
+            if (!cfg.woodSourceBuildings.contains(building.defId)) continue;
             if (building.bb == null) continue;
-            BlockPos bed = scanBedInBox(level, building.bb);
-            if (bed != null) return bed;
+            if (!scanLogs(level, building.bb).isEmpty()) return true;
         }
-        return null;
-    }
-
-    // Scans a bounding box for a BedBlock HEAD part. startSleepInBed requires the head position.
-    private static BlockPos scanBedInBox(ServerLevel level, BoundingBox bb) {
-        for (int x = bb.minX(); x <= bb.maxX(); x++) {
-            for (int y = bb.minY(); y <= bb.maxY(); y++) {
-                for (int z = bb.minZ(); z <= bb.maxZ(); z++) {
-                    BlockPos pos = new BlockPos(x, y, z);
-                    BlockState state = level.getBlockState(pos);
-                    if (state.getBlock() instanceof BedBlock
-                            && state.getValue(BedBlock.PART) == BedPart.HEAD) {
-                        return pos;
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private List<PlacedBuilding> getEligible(Town town, LumberjackConfigDataHandler.Config cfg) {
-        return town.getBuildings().stream()
-            .filter(b -> cfg.woodSourceBuildings.contains(b.defId))
-            .toList();
-    }
-
-    private void advanceCursor(Town town, LumberjackConfigDataHandler.Config cfg) {
-        List<PlacedBuilding> eligible = getEligible(town, cfg);
-        if (!eligible.isEmpty()) {
-            buildingCursor = (buildingCursor + 1) % eligible.size();
-        }
+        return false;
     }
 
     // Returns all log blocks in BB + vertical extension, sorted Y descending (top to bottom).

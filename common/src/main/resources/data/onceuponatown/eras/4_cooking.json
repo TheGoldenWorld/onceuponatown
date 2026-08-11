@@ -18,9 +18,10 @@
     { "defId": "beekeeper", "count": 1 }
   ],
 
-  "auto_build_sequence": ["beekeeper"],
-
+  "auto_build_sequence": ["beekeeper", "carpenter"],
   "auto_upgrade_ids": ["settlement_2"],
+
+  "unlocked_building_ids": ["house_slot"],
 
   "next_orientation": "cooking"
 }

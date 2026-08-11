@@ -3,6 +3,7 @@ package org.dawnoftime.onceuponatown.client.screen;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import org.dawnoftime.onceuponatown.client.gui.widgets.NbtPreviewWidget;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -16,6 +17,7 @@ class TownHubTypes {
 
     record BuildingEntry(String id, String category, String iconItem,
                          List<CostEntry> cost,
+                         List<CostEntry> playerCost,
                          List<BuildingProductionTooltip.Row> productionRows,
                          List<ProductionCell> productionCells,
                          int requiredResidents,
@@ -71,6 +73,7 @@ class TownHubTypes {
             case "gardens"     -> 0xFF33AA33;
             case "naturals"    -> 0xFF666666;
             case "buildings"   -> 0xFF885533;
+            case "player"      -> 0xFF3377FF;
             default            -> 0xFF888888;
         };
     }
@@ -104,13 +107,6 @@ class TownHubTypes {
     }
 
     static void drawPadlockIcon(GuiGraphics g, int bx, int by) {
-        int c = 0xFFCCCCCC;
-        int k = 0xFF111111;
-        g.fill(bx + 2, by,     bx + 6, by + 1, c);
-        g.fill(bx + 1, by + 1, bx + 2, by + 4, c);
-        g.fill(bx + 6, by + 1, bx + 7, by + 4, c);
-        g.fill(bx,     by + 4, bx + 8, by + 10, c);
-        g.fill(bx + 3, by + 5, bx + 5, by + 7, k);
-        g.fill(bx + 3, by + 7, bx + 5, by + 9, k);
+        NbtPreviewWidget.drawPadlockIcon(g, bx, by);
     }
 }

@@ -6,6 +6,7 @@
   "icon_item": "minecraft:saddle",
 
   "weight_cap_increase": 10,
+  "max_upgrade_level": 3,
 
   "resource_cost": [
     { "item": "minecraft:oak_log", "amount": 64 },
@@ -17,10 +18,10 @@
     { "defId": "pig_farm", "count": 1 }
   ],
 
-  "auto_build_sequence": [{"defId": "grove", "count": 3}, {"defId": "pig_field", "count": 2}, "cow_field", "pig_farm", "carpenter"],
-
+  "auto_build_sequence": [{"defId": "grove", "count": 3}, {"defId": "pig_field", "count": 2}, "cow_field", "pig_farm"],
   "auto_upgrade_ids": ["settlement_2"],
-  "unlocked_building_ids": ["leather_workshop"],
+
+  "unlocked_building_ids": ["leather_workshop", "carpenter", "brownfield"],
 
   "next_orientation": "ranching"
 }

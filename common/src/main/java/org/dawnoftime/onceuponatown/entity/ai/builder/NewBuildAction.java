@@ -130,7 +130,7 @@ public class NewBuildAction implements BuilderAction {
 
     // Converts a raw SchematicBlock list into the unified ordered PlacementStep list:
     //   1. Normal BlockSteps (Y-sorted snake, order preserved from SchematicReader)
-    //   2. Deferred BlockSteps (controlled by DEFERRED_PLACEMENT_PRIORITY: water first, lily pads after)
+    //   2. Deferred BlockSteps (waterlogged=0, water=1, lily pads=2)
     //   3. EntitySteps (last, placed one-by-one by the NPC after all blocks are done)
     private List<PlacementStep> buildStepList(List<SchematicBlock> rawBlocks, StructureTemplate template) {
         List<BlockStep> normal = new ArrayList<>(rawBlocks.size());
@@ -138,13 +138,13 @@ public class NewBuildAction implements BuilderAction {
 
         for (SchematicBlock b : rawBlocks) {
             BlockStep step = new BlockStep(finalPlacementPos.offset(b.localPos()), b.state(), b.nbt());
-            if (SchematicConstants.DEFERRED_PLACEMENT_PRIORITY.containsKey(b.state().getBlock())) {
+            if (SchematicConstants.getDeferredPriority(b.state()).isPresent()) {
                 deferred.add(step);
             } else {
                 normal.add(step);
             }
         }
-        deferred.sort(Comparator.comparingInt(b -> SchematicConstants.DEFERRED_PLACEMENT_PRIORITY.get(b.state().getBlock())));
+        deferred.sort(Comparator.comparingInt(b -> SchematicConstants.getDeferredPriority(b.state()).getAsInt()));
 
         List<SchematicEntity> entities = SchematicReader.readEntities(template, rotation, finalPlacementPos);
 
@@ -173,7 +173,7 @@ public class NewBuildAction implements BuilderAction {
                 .orElseGet(() -> new BoundingBox(
                     finalPlacementPos.getX(), finalPlacementPos.getY(), finalPlacementPos.getZ(),
                     finalPlacementPos.getX(), finalPlacementPos.getY(), finalPlacementPos.getZ()));
-        town.registerBuilding(finalPlacementPos, def.id, connections, bb, rotation, obstaclePositions);
+        town.registerBuilding(finalPlacementPos, def.id, connections, bb, rotation, obstaclePositions, usedConnection.pos());
         if (def.spawnsNpcJob != null) {
             town.incrementTargetNpcCount(def.spawnsNpcJob);
         }

@@ -22,9 +22,11 @@ import org.dawnoftime.onceuponatown.datapack.BuilderConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuildingDataHandler;
 import org.dawnoftime.onceuponatown.entity.Npc;
 import org.dawnoftime.onceuponatown.entity.ai.shared.GoToPosition;
+import org.dawnoftime.onceuponatown.entity.ai.shared.StandingPositionFinder;
 import org.dawnoftime.onceuponatown.town.ActiveBuildState;
 import org.dawnoftime.onceuponatown.town.BuildingDef;
 import org.dawnoftime.onceuponatown.town.ConnectionPoint;
+import org.dawnoftime.onceuponatown.town.PlacedBuilding;
 import org.dawnoftime.onceuponatown.town.Town;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,15 +55,14 @@ public class BuildGoal implements BuildTask {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BuildGoal.class);
 
-    private static int blockDelay()        { return BuilderConfigDataHandler.get().blockDelayTicks; }
-    private static int burstPauseMin()     { return BuilderConfigDataHandler.get().burstPauseMinTicks; }
-    private static int burstPauseMax()     { return BuilderConfigDataHandler.get().burstPauseMaxTicks; }
-    private static int maxBurstExtra()     { return BuilderConfigDataHandler.get().maxBurstExtraBlocks; }
-    private static double reachDist()      { return BuilderConfigDataHandler.get().blockReachDistance; }
-    private static float planReadChance()  { return BuilderConfigDataHandler.get().planReadChance; }
-    private static int planReadMin()       { return BuilderConfigDataHandler.get().planReadMinTicks; }
-    private static int planReadMax()       { return BuilderConfigDataHandler.get().planReadMaxTicks; }
-
+    private static int blockDelay()           { return BuilderConfigDataHandler.get().blockDelayTicks; }
+    private static int burstPauseMin()        { return BuilderConfigDataHandler.get().burstPauseMinTicks; }
+    private static int burstPauseMax()        { return BuilderConfigDataHandler.get().burstPauseMaxTicks; }
+    private static int maxBurstExtra()        { return BuilderConfigDataHandler.get().maxBurstExtraBlocks; }
+    private static double reachDist()         { return BuilderConfigDataHandler.get().blockReachDistance; }
+    private static float planReadChance()     { return BuilderConfigDataHandler.get().planReadChance; }
+    private static int planReadMin()          { return BuilderConfigDataHandler.get().planReadMinTicks; }
+    private static int planReadMax()          { return BuilderConfigDataHandler.get().planReadMaxTicks; }
     private final Npc npc;
     private final BuilderAction action;
     private Phase phase = Phase.MOVING;
@@ -74,6 +75,8 @@ public class BuildGoal implements BuildTask {
     private int burstBlocksLeft = 0;
     private GoToPosition buildGoTo = null;
     private BlockPos currentBuildTarget = null;
+    private BlockPos standingTarget = null;
+    private int navStuckTicks = 0;
 
     public BuildGoal(Npc npc, BuilderAction action) {
         this.npc = npc;
@@ -152,9 +155,13 @@ public class BuildGoal implements BuildTask {
         if (!inReach) {
             if (!nextWorldPos.equals(currentBuildTarget)) {
                 currentBuildTarget = nextWorldPos;
-                if (buildGoTo == null) buildGoTo = new GoToPosition(npc, nextWorldPos, BuilderConfigDataHandler.get().walkSpeed, reachDist());
-                else buildGoTo.updateTarget(nextWorldPos);
+                standingTarget = StandingPositionFinder.find(sl, nextWorldPos, reachDist());
+                BlockPos navTarget = standingTarget != null ? standingTarget : nextWorldPos;
+                double arrivalRadius = standingTarget != null ? 1.5 : reachDist();
+                buildGoTo = new GoToPosition(npc, navTarget, BuilderConfigDataHandler.get().walkSpeed, arrivalRadius);
+                navStuckTicks = 0;
             }
+            navStuckTicks++;
             buildGoTo.tick();
             return false;
         }
@@ -240,26 +247,34 @@ public class BuildGoal implements BuildTask {
         // State is persisted in Town.activeBuilds; no NPC NBT serialization needed.
     }
 
-    // Reconstructs a BuildGoal from a Town.ActiveBuildState after a server restart.
-    // The NPC re-walks to the build site (MOVING phase) but skips terrain prep and the reading animation.
-    // Also registers the build BB into underConstruction -- the only place ServerLevel is available post-reload.
+    // Reconstructs a BuildGoal from a Town.ActiveBuildState after a server restart or sleep.
+    // fromLevel >= 0 indicates an Upgrade resume; fromLevel == -1 indicates a NewBuild resume.
     public static BuildGoal fromActiveBuildState(ActiveBuildState state, Npc npc, Town town, ServerLevel level) {
         BuildingDef def = BuildingDataHandler.get(state.defId()).orElse(null);
         if (def == null) return null;
 
+        if (state.fromLevel() >= 0) {
+            // Upgrade resume: find the placed building by worldPos and reconstruct with skipDiff.
+            PlacedBuilding building = town.getBuildings().stream()
+                .filter(b -> b.worldPos.equals(state.placementPos()))
+                .findFirst().orElse(null);
+            if (building == null) return null;
+            UpgradeAction action = new UpgradeAction(building, def, state.fromLevel(), town);
+            action.skipDiff = true;
+            return new BuildGoal(npc, action);
+        }
+
+        // NewBuild resume: re-walk to the site, skip terrain prep and the reading animation.
+        // addUnderConstruction is called here -- Town.fromNbt() is static with no ServerLevel.
         ConnectionPoint conn = new ConnectionPoint(
             state.connectionPos(), state.connectionDir(), state.connectionTarget(), 0L);
-
         NewBuildAction action = new NewBuildAction(
             def, conn, state.placementPos(), state.rotation(),
             state.entryConnectorPos(), state.cost(), town);
         action.skipTerrainPrep = true;
         action.skipInitialReading = true;
-
-        // addUnderConstruction is called here -- Town.fromNbt() is static with no ServerLevel.
         SchematicBounds.computeBoundingBox(level, state.placementPos(), def.nbt, state.rotation())
             .ifPresent(bb -> town.addUnderConstruction(def.id, state.placementPos(), bb, state.rotation()));
-
         return new BuildGoal(npc, action);
     }
 }

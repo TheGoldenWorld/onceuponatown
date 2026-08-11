@@ -1,0 +1,24 @@
+{
+  "from_era": 3,
+  "from_orientation": "urban",
+  "orientation_label": "Urban",
+  "structure_label": "Village",
+  "icon_item": "minecraft:emerald",
+
+  "weight_cap_increase": 10,
+  "max_upgrade_level": 4,
+
+  "resource_cost": [
+    { "item": "minecraft:oak_log", "amount": 75 },
+    { "item": "minecraft:cobblestone", "amount": 64 }
+  ],
+
+  "required_residents": 9,
+
+  "auto_build_sequence": ["carpenter"],
+  "auto_upgrade_ids": ["settlement_3"],
+
+  "unlocked_building_ids": ["house_slot"],
+
+  "next_orientation": "urban"
+}

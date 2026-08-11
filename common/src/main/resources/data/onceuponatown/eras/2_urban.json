@@ -21,7 +21,7 @@
   "auto_build_sequence": [{"defId": "grove", "count": 2}, "oven", "wild_spot", "lumberjack"],
 
 
-  "unlocked_building_ids": ["lone_garden", "carpenter", "merchant_shop", "lone_place", "fountain_place"],
+  "unlocked_building_ids": ["lone_garden", "fisherman", "merchant_shop", "lone_place", "fountain_place"],
   "unlock_npc_counts": { "builder": 1 },
   "auto_upgrade_ids": ["settlement_3"],
 

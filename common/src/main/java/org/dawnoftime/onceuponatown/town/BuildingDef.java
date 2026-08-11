@@ -62,6 +62,8 @@ public class BuildingDef {
     public final List<String> obstacleBlocks;
     // Job id of the NPC spawned when this building is placed. Null = no NPC spawn.
     public final String spawnsNpcJob;
+    // Items consumed from the player's inventory when queuing this building (refunded on dequeue).
+    public final List<ItemCost> playerCost;
 
     // One upgrade step: cost + what it changes. All fields are additive deltas.
     public record UpgradeLevel(float cadenceMultiplier, int capacityStacksAdd, int amountAdd,
@@ -91,7 +93,8 @@ public class BuildingDef {
                        int requiredResidents, List<BuildingRequirement> requiredBuildings,
                        float consumptionPerResident, List<ItemCost> initialStock,
                        int herd, float consumptionPerHerd, int weight,
-                       List<String> obstacleBlocks, String spawnsNpcJob) {
+                       List<String> obstacleBlocks, String spawnsNpcJob,
+                       List<ItemCost> playerCost) {
         this.id = id;
         this.namespace = namespace;
         this.nbt = nbt;
@@ -119,6 +122,7 @@ public class BuildingDef {
         this.weight = weight;
         this.obstacleBlocks = obstacleBlocks;
         this.spawnsNpcJob = spawnsNpcJob;
+        this.playerCost = playerCost;
     }
 
     // Returns effective production, cadence, residents, consumption, herd, and herd consumption at a given upgrade level.

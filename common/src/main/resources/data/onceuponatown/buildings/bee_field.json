@@ -5,6 +5,8 @@
   "icon_item": "minecraft:honeycomb",
   "category": "jobs",
   "weight": 2,
+  "spawns_npc": "beekeeper",
+
   "required_buildings": [
     { "defId": "wild_bee", "count": 2 }
   ],

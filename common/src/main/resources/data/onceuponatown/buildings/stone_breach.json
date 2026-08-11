@@ -5,6 +5,7 @@
   "icon_item": "minecraft:wooden_pickaxe",
   "category": "jobs",
   "weight": 2,
+  "spawns_npc": "miner",
 
   "construction_cost": [
     {

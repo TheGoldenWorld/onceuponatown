@@ -17,12 +17,13 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.dawnoftime.onceuponatown.entity.ai.shared.SleepConfig;
 
 public class BuilderConfigDataHandler {
     private static final Gson GSON = new GsonBuilder().create();
     private static final Logger LOGGER = LoggerFactory.getLogger(BuilderConfigDataHandler.class);
 
-    public static final class Config {
+    public static final class Config implements SleepConfig {
         public final double walkSpeed;
         public final double blockReachDistance;
         public final int blockDelayTicks;
@@ -56,6 +57,11 @@ public class BuilderConfigDataHandler {
             this.wakeupTime = wakeupTime;
             this.restBuildings = restBuildings;
         }
+
+        @Override public int getBedtime()               { return bedtime; }
+        @Override public int getWakeupTime()            { return wakeupTime; }
+        @Override public List<String> getRestBuildings(){ return restBuildings; }
+        @Override public double getWalkSpeed()          { return walkSpeed; }
     }
 
     private static final Config DEFAULTS = new Config(

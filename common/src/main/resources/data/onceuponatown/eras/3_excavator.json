@@ -6,6 +6,7 @@
   "icon_item": "minecraft:blast_furnace",
 
   "weight_cap_increase": 10,
+  "max_upgrade_level": 3,
 
   "resource_cost": [
     { "item": "minecraft:oak_log", "amount": 64 },
@@ -17,9 +18,10 @@
     { "defId": "open_mine", "count": 1 }
   ],
 
-  "auto_build_sequence": [{"defId": "grove", "count": 3}, "open_mine", "carpenter"],
-
+  "auto_build_sequence": [{"defId": "grove", "count": 3}, "open_mine"],
   "auto_upgrade_ids": ["settlement"],
+
+  "unlocked_building_ids": ["carpenter", "brownfield"],
 
   "next_orientation": "excavator"
 }

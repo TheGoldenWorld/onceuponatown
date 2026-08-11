@@ -49,6 +49,8 @@ public class NbtPreviewWidget {
 
     private static final Map<String, List<BlockData>> CACHE = new HashMap<>();
 
+    public static final ResourceLocation ICONS_TEXTURE = new ResourceLocation("onceuponatown", "textures/gui/icons.png");
+
     private final int x, y, width, height;
 
     private List<BlockData> blocks = null;
@@ -243,8 +245,8 @@ public class NbtPreviewWidget {
             int vy = y + 9;
             int vw = width - 5;
             int vh = height - 11;
-            int px = vx + (vw - 8) / 2;
-            int py = vy + (vh - 10) / 2;
+            int px = vx + (vw - 16) / 2;
+            int py = vy + (vh - 16) / 2;
             RenderSystem.disableDepthTest();
             g.pose().pushPose();
             g.pose().translate(0, 0, 400);
@@ -255,14 +257,9 @@ public class NbtPreviewWidget {
     }
 
     public static void drawPadlockIcon(GuiGraphics g, int bx, int by) {
-        int c = 0xFFCCCCCC;
-        int k = 0xFF111111;
-        g.fill(bx + 2, by,     bx + 6, by + 1, c);
-        g.fill(bx + 1, by + 1, bx + 2, by + 4, c);
-        g.fill(bx + 6, by + 1, bx + 7, by + 4, c);
-        g.fill(bx,     by + 4, bx + 8, by + 10, c);
-        g.fill(bx + 3, by + 5, bx + 5, by + 7, k);
-        g.fill(bx + 3, by + 7, bx + 5, by + 9, k);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        g.blit(ICONS_TEXTURE, bx, by, 16, 16, 0f, 0f, 16, 16, 64, 64);
     }
 
     public boolean mouseScrolled(double mx, double my, double delta) {

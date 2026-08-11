@@ -7,5 +7,8 @@
   "prerequisites": {
     "required_buildings": ["street_10"]
   },
-  "reward": { "type": "PLAYER", "item": "minecraft:emerald", "amount": 2 }
+  "rewards": [
+    { "type": "PLAYER", "item": "minecraft:emerald", "amount": 2 },
+    { "type": "XP", "amount": 30 }
+  ]
 }

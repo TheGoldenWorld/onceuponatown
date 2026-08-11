@@ -1,6 +1,8 @@
 package org.dawnoftime.onceuponatown.client.screen;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -28,6 +30,9 @@ import java.util.Set;
 import static org.dawnoftime.onceuponatown.client.screen.TownHubTypes.*;
 
 class ConstructionTab {
+
+    private static final ResourceLocation TEXTURE_CONSTRUCTION =
+        new ResourceLocation("onceuponatown", "textures/gui/town_construction.png");
 
     private static final int PANEL_W            = 176;
     private static final int QUEUE_GRID_X       = 8;
@@ -83,6 +88,11 @@ class ConstructionTab {
             dt.getList("ConstructionCost", Tag.TAG_COMPOUND).forEach(cr -> {
                 CompoundTag ct = (CompoundTag) cr;
                 cost.add(new CostEntry(ct.getString("Item"), ct.getInt("Amount")));
+            });
+            List<CostEntry> playerCost = new ArrayList<>();
+            dt.getList("PlayerCost", Tag.TAG_COMPOUND).forEach(cr -> {
+                CompoundTag ct = (CompoundTag) cr;
+                playerCost.add(new CostEntry(ct.getString("Item"), ct.getInt("Amount")));
             });
 
             int currentLevel = dt.getInt("CurrentLevel");
@@ -189,7 +199,7 @@ class ConstructionTab {
             dt.getList("NbtLevels", Tag.TAG_STRING).forEach(t -> nbtLevels.add(t.getAsString()));
             int weight            = dt.contains("Weight") ? dt.getInt("Weight") : 1;
 
-            buildingCatalog.add(new BuildingEntry(id, category, iconItem, cost, productionRows,
+            buildingCatalog.add(new BuildingEntry(id, category, iconItem, cost, playerCost, productionRows,
                 productionCells, requiredResidents, requiredBuildings,
                 productionBonus, baseConsumption, maxConsumption, maxResidents, nextEra,
                 nbtPath, hasBuilt, nbtLevels, builtCount, weight));
@@ -241,7 +251,7 @@ class ConstructionTab {
                 if (qe.locked()) {
                     g.pose().pushPose();
                     g.pose().translate(0, 0, 300);
-                    TownHubTypes.drawPadlockIcon(g, sx + 4, sy + 2);
+                    TownHubTypes.drawPadlockIcon(g, sx, sy);
                     g.pose().popPose();
                 }
             } else {
@@ -281,7 +291,7 @@ class ConstructionTab {
                         g.fill(sx, sy, sx + CELL - 2, sy + CELL - 2, 0x99111111);
                         g.pose().pushPose();
                         g.pose().translate(0, 0, 200);
-                        TownHubTypes.drawPadlockIcon(g, sx + 4, sy + 2);
+                        TownHubTypes.drawPadlockIcon(g, sx, sy);
                         g.pose().popPose();
                     }
 
@@ -327,9 +337,9 @@ class ConstructionTab {
     }
 
     void renderWeightBar(GuiGraphics g, int leftPos, int topPos, int mx, int my, TownHubTabContext ctx) {
-        int barX = leftPos + QUEUE_GRID_X - 1;
+        int barX = leftPos + 7;
         int barH = 9;
-        int barY = topPos + QUEUE_GRID_Y + (CELL - 7) / 2 - 5;
+        int barY = topPos + 201;
         int barW = QUEUE_COLS * CELL;
 
         g.fill(barX, barY, barX + barW, barY + barH, 0xFF111111);
@@ -392,6 +402,26 @@ class ConstructionTab {
                     ? ce.itemId().substring(ce.itemId().indexOf(':') + 1) : ce.itemId();
                 lines.add(Component.literal(have + "/" + ce.amount() + " " + TownHubTypes.formatId(itemName))
                     .withStyle(s -> s.withColor(color)));
+            }
+            if (!entry.playerCost().isEmpty()) {
+                lines.add(Component.literal("Player").withStyle(s -> s.withColor(0xAAAAAA).withItalic(true)));
+                var mc = Minecraft.getInstance();
+                for (CostEntry ce : entry.playerCost()) {
+                    Item pcItem = BuiltInRegistries.ITEM.get(new ResourceLocation(ce.itemId()));
+                    int have = 0;
+                    if (mc.player != null) {
+                        for (int i = 0; i < mc.player.getInventory().getContainerSize(); i++) {
+                            ItemStack s = mc.player.getInventory().getItem(i);
+                            if (!s.isEmpty() && s.is(pcItem)) have += s.getCount();
+                        }
+                    }
+                    boolean ok = have >= ce.amount();
+                    int color = ok ? 0x55FF55 : 0xFF5555;
+                    String itemName = ce.itemId().contains(":")
+                        ? ce.itemId().substring(ce.itemId().indexOf(':') + 1) : ce.itemId();
+                    lines.add(Component.literal(have + "/" + ce.amount() + " " + TownHubTypes.formatId(itemName))
+                        .withStyle(s -> s.withColor(color)));
+                }
             }
             if (entry.requiredResidents() > 0) {
                 boolean met = ctx.activeResidents() >= entry.requiredResidents();
@@ -461,7 +491,7 @@ class ConstructionTab {
         if (button == 0 && selectedCatalogBuildingId != null && constructionPreview != null) {
             int expBtnX = leftPos + 64;
             int expBtnY = topPos + 110;
-            if (mX >= expBtnX && mX < expBtnX + 12 && mY >= expBtnY && mY < expBtnY + 12) {
+            if (mX >= expBtnX && mX < expBtnX + 16 && mY >= expBtnY && mY < expBtnY + 16) {
                 openExpandedView(screenW, screenH, ctx);
                 return true;
             }
@@ -609,7 +639,7 @@ class ConstructionTab {
                     if (cell.locked()) {
                         g.pose().pushPose();
                         g.pose().translate(0, 0, 200);
-                        NbtPreviewWidget.drawPadlockIcon(g, colXs[col] + 4, rowYs[row] + 3);
+                        NbtPreviewWidget.drawPadlockIcon(g, colXs[col], rowYs[row]);
                         g.pose().popPose();
                     }
                 }
@@ -636,9 +666,11 @@ class ConstructionTab {
         if (sel != null && constructionPreview != null) {
             int expBtnX = leftPos + 64;
             int expBtnY = topPos + 110;
-            boolean expHover = mx >= expBtnX && mx < expBtnX + 12 && my >= expBtnY && my < expBtnY + 12;
-            g.fill(expBtnX, expBtnY, expBtnX + 12, expBtnY + 12, expHover ? 0xFF666666 : 0xFF333333);
-            drawExpandIcon(g, expBtnX + 2, expBtnY + 2);
+            boolean expHover = mx >= expBtnX && mx < expBtnX + 16 && my >= expBtnY && my < expBtnY + 16;
+            if (expHover) g.fill(expBtnX, expBtnY, expBtnX + 16, expBtnY + 16, 0x30FFFFFF);
+            RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
+            g.blit(TEXTURE_CONSTRUCTION, expBtnX, expBtnY, 16, 16, 177f, 1f, 16, 16, 256, 256);
         }
     }
 
@@ -680,6 +712,20 @@ class ConstructionTab {
                                   Map<String, Integer> stockSnapshot) {
         for (CostEntry ce : entry.cost()) {
             if (stockSnapshot.getOrDefault(ce.itemId(), 0) < ce.amount()) return false;
+        }
+        if (!entry.playerCost().isEmpty()) {
+            var mc = Minecraft.getInstance();
+            if (mc.player != null) {
+                for (CostEntry ce : entry.playerCost()) {
+                    Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(ce.itemId()));
+                    int have = 0;
+                    for (int i = 0; i < mc.player.getInventory().getContainerSize(); i++) {
+                        ItemStack s = mc.player.getInventory().getItem(i);
+                        if (!s.isEmpty() && s.is(item)) have += s.getCount();
+                    }
+                    if (have < ce.amount()) return false;
+                }
+            }
         }
         return currentWeight + entry.weight() <= maxWeight;
     }
@@ -749,19 +795,6 @@ class ConstructionTab {
         if (totalLevels <= 1) return 0;
         float t = (float)(mouseX - trackLeft) / SLIDER_TRACK_W;
         return Math.round(Math.max(0f, Math.min(1f, t)) * (totalLevels - 1));
-    }
-
-    // Pixel-art expand icon (8x8 px) -- corner brackets pointing outward
-    private static void drawExpandIcon(GuiGraphics g, int bx, int by) {
-        int c = 0xFFCCCCCC;
-        g.fill(bx,     by,     bx + 3, by + 1, c);
-        g.fill(bx,     by,     bx + 1, by + 3, c);
-        g.fill(bx + 5, by,     bx + 8, by + 1, c);
-        g.fill(bx + 7, by,     bx + 8, by + 3, c);
-        g.fill(bx,     by + 7, bx + 3, by + 8, c);
-        g.fill(bx,     by + 5, bx + 1, by + 8, c);
-        g.fill(bx + 5, by + 7, bx + 8, by + 8, c);
-        g.fill(bx + 7, by + 5, bx + 8, by + 8, c);
     }
 
 }

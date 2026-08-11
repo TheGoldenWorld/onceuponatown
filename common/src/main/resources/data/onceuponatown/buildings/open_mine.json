@@ -5,6 +5,7 @@
   "icon_item": "minecraft:blast_furnace",
   "category": "jobs",
   "weight": 4,
+  "spawns_npc": "miner",
 
   "construction_cost": [
     {

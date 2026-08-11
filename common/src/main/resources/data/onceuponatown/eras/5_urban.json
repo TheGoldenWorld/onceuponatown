@@ -1,0 +1,21 @@
+{
+  "from_era": 4,
+  "from_orientation": "urban",
+  "orientation_label": "Urban",
+  "structure_label": "Village",
+  "icon_item": "minecraft:emerald",
+
+  "weight_cap_increase": 10,
+  "max_upgrade_level": 5,
+
+  "resource_cost": [
+    { "item": "minecraft:oak_log", "amount": 90 },
+    { "item": "minecraft:cobblestone", "amount": 75 }
+  ],
+
+  "required_residents": 10,
+
+  "auto_upgrade_ids": ["settlement_3"],
+
+  "next_orientation": "urban"
+}

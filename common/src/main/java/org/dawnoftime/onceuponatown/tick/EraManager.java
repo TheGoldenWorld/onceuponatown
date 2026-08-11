@@ -17,7 +17,6 @@ import org.dawnoftime.onceuponatown.town.TownLogEntry;
 
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 public class EraManager {
 
@@ -30,6 +29,11 @@ public class EraManager {
 
         BlockPos anchorPos = BlockPos.of(anchorKey);
         String orientation = town.getCurrentOrientation();
+
+        // Slot U runs independently so it continues at the final era (no further transitions).
+        if (gameTime % 200 == 0) {
+            tickUpgradeSlot(town, level, anchorPos, gameTime);
+        }
 
         List<EraTransitionDef> available = EraTransitionDataHandler.getAvailableTransitions(town.getCurrentEra(), orientation);
         if (available.isEmpty()) return;
@@ -66,9 +70,6 @@ public class EraManager {
 
         // Slot R: runs every 200 ticks regardless of sequence state.
         tickResidentSlot(town, target, level, anchorPos, gameTime);
-
-        // Slot U: autonomous upgrade -- one locked upgrade entry in queue at a time.
-        tickUpgradeSlot(town, level, anchorPos, gameTime);
 
         // Slot S: only runs when the sequence has unsatisfied targets.
         List<EraTransitionDef.AutoBuildEntry> sequence = getActiveAutoBuildSequence(town);
@@ -222,24 +223,27 @@ public class EraManager {
             .orElse(null);
     }
 
-    // Slot U: keeps exactly one locked upgrade entry in the queue at a time.
+    // Slot U: keeps up to one locked upgrade entry per builder in the queue at a time.
     // Mirrors the planned->promote->real pattern used by slots R and S.
     private static void tickUpgradeSlot(Town town, ServerLevel level, BlockPos anchorPos, long gameTime) {
-        // Case 1: planned entry waiting for stock -- try to promote.
-        QueueEntry.Upgrade planned = town.getPlannedAutonomousUpgrade();
-        if (planned != null) {
+        int builderCount = Math.max(1, town.getTargetNpcCount("builder"));
+
+        // Case 1: promote the oldest planned entry if stock is now available.
+        // Does not return early so injection below can still fill remaining builder slots.
+        if (town.getPlannedAutonomousUpgrade() != null) {
             boolean promoted = town.tryPromotePlannedUpgrade();
             if (promoted) {
                 LevelTowns.get(level).markDirty();
                 NetworkHelper.pushBuildingListToWatchers(level, town, anchorPos);
             }
-            return;
         }
 
-        // Case 2: real locked upgrade entry -- builder is already on it.
-        if (town.hasRealAutonomousUpgradeEntry()) return;
+        // Case 2: already at or above builder capacity -- nothing more to inject.
+        int totalActive = town.countRealAutonomousUpgradeEntries() + town.countPlannedAutonomousUpgradeEntries();
+        if (totalActive >= builderCount) return;
 
-        // Case 3: slot empty -- pick a random eligible building.
+        // Case 3: below capacity -- inject one entry for a different eligible building.
+        // pickUpgradeCandidate already excludes buildings with an existing locked entry.
         PlacedBuilding candidate = pickUpgradeCandidate(town, level);
         if (candidate == null) return;
 
@@ -270,18 +274,22 @@ public class EraManager {
 
     // Picks a random placed building that is eligible for autonomous upgrade.
     private static PlacedBuilding pickUpgradeCandidate(Town town, ServerLevel level) {
-        List<PlacedBuilding> candidates = town.getBuildings().stream()
-            .filter(b -> !EXCLUDED_AUTO_UPGRADE_DEFS.contains(b.defId))
-            .filter(b -> {
-                BuildingDef def = BuildingDataHandler.get(b.defId).orElse(null);
-                if (def == null || (def.upgrades.isEmpty() && def.nbtLevels.isEmpty())) return false;
-                int maxLevel = Math.max(def.upgrades.size(), def.nbtLevels.size());
-                return b.getUpgradeLevel() < Math.min(town.getCurrentMaxUpgradeLevel(), maxLevel);
-            })
-            .filter(b -> !town.isUnderUpgrade(b.worldPos))
-            .filter(b -> town.getConstructionQueue().stream()
-                .noneMatch(e -> e instanceof QueueEntry.Upgrade u && u.locked() && u.buildingWorldPos().equals(b.worldPos)))
-            .collect(Collectors.toList());
+        int maxUpgradeLevel = town.getCurrentMaxUpgradeLevel();
+        List<PlacedBuilding> candidates = new java.util.ArrayList<>();
+
+        for (PlacedBuilding b : town.getBuildings()) {
+            if (EXCLUDED_AUTO_UPGRADE_DEFS.contains(b.defId)) continue;
+            BuildingDef def = BuildingDataHandler.get(b.defId).orElse(null);
+            if (def == null || (def.upgrades.isEmpty() && def.nbtLevels.isEmpty())) continue;
+            int maxLevel = Math.max(def.upgrades.size(), def.nbtLevels.size());
+            int cap = Math.min(maxUpgradeLevel, maxLevel);
+            if (b.getUpgradeLevel() >= cap) continue;
+            if (town.isUnderUpgrade(b.worldPos)) continue;
+            boolean hasLockedEntry = town.getConstructionQueue().stream()
+                .anyMatch(e -> e instanceof QueueEntry.Upgrade u && u.locked() && u.buildingWorldPos().equals(b.worldPos));
+            if (hasLockedEntry) continue;
+            candidates.add(b);
+        }
 
         if (candidates.isEmpty()) return null;
         return candidates.get(level.random.nextInt(candidates.size()));

@@ -10,6 +10,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import org.dawnoftime.onceuponatown.client.renderer.PingRenderer;
 import org.dawnoftime.onceuponatown.network.NetworkHelper;
 
 import java.util.ArrayList;
@@ -72,7 +73,8 @@ public class QuestHubWidget extends DraggableWidget {
         String questType,
         String titleKey,
         String descKey,
-        List<CondRow> conditions
+        List<CondRow> conditions,
+        long targetCenterPos
     ) {}
 
     private final List<QuestRow> taskRows = new ArrayList<>();
@@ -115,7 +117,8 @@ public class QuestHubWidget extends DraggableWidget {
                 questType,
                 tag.getString("TitleKey"),
                 tag.getString("DescKey"),
-                conds
+                conds,
+                tag.contains("TargetCenterPos") ? tag.getLong("TargetCenterPos") : 0L
             );
             if ("NOTE".equals(questType)) noteRows.add(row);
             else taskRows.add(row);
@@ -213,7 +216,7 @@ public class QuestHubWidget extends DraggableWidget {
         List<QuestRow> active = showNotes ? noteRows : taskRows;
 
         if (active.isEmpty()) {
-            String msg = showNotes ? "No new notices." : "No active tasks.";
+            String msg = showNotes ? "No new notes." : "No active tasks.";
             g.drawString(font, msg, cx + (contentW - font.width(msg)) / 2, cy + VISIBLE_H / 2 - 4, 0xFF888888, false);
         } else {
             int cardY = cy + PAD - scrollPx;
@@ -297,14 +300,27 @@ public class QuestHubWidget extends DraggableWidget {
         lineY += PAD;
 
         if ("SITE_CLEARANCE".equals(qr.questType())) {
-            int btnW = cwm - 10;
-            boolean verifyHover = mx >= cxm + PAD && mx < cxm + PAD + btnW
-                               && my >= lineY     && my < lineY + BTN_H;
-            g.fill(cxm + PAD, lineY, cxm + PAD + btnW, lineY + BTN_H,
+            int totalW  = cwm - 10;
+            int halfW   = (totalW - PAD) / 2;
+            int locateX = cxm + PAD;
+            int verifyX = locateX + halfW + PAD;
+
+            boolean locateHover = mx >= locateX && mx < locateX + halfW
+                               && my >= lineY   && my < lineY + BTN_H;
+            g.fill(locateX, lineY, locateX + halfW, lineY + BTN_H,
+                locateHover ? 0xFF446699 : 0xFF335588);
+            String locateText = Component.translatable("onceuponatown.quest.locate").getString();
+            g.drawString(font, locateText,
+                locateX + (halfW - font.width(locateText)) / 2, lineY + 2, 0xFFCCDDFF, false);
+
+            boolean verifyHover = mx >= verifyX && mx < verifyX + halfW
+                               && my >= lineY   && my < lineY + BTN_H;
+            g.fill(verifyX, lineY, verifyX + halfW, lineY + BTN_H,
                 verifyHover ? 0xFF446699 : 0xFF335588);
             String verifyText = Component.translatable("onceuponatown.quest.verify").getString();
             g.drawString(font, verifyText,
-                cxm + PAD + (btnW - font.width(verifyText)) / 2, lineY + 2, 0xFFCCDDFF, false);
+                verifyX + (halfW - font.width(verifyText)) / 2, lineY + 2, 0xFFCCDDFF, false);
+
             lineY += BTN_H + PAD;
         }
 
@@ -390,11 +406,22 @@ if ("DELIVERY".equals(cond.type())) {
                 int btnLeft = x + CARD_MARGIN + PAD;
 
                 if ("SITE_CLEARANCE".equals(qr.questType())) {
-                    int verifyBtnY = cardAbsY + TITLE_BAR_CARD_H + PAD + descLines * 9 + PAD
+                    int splitRowY = cardAbsY + TITLE_BAR_CARD_H + PAD + descLines * 9 + PAD
                         + qr.conditions().size() * COND_H + PAD;
-                    int claimBtnY = verifyBtnY + BTN_H + PAD;
-                    if (mouseX >= btnLeft && mouseX < btnLeft + btnW
-                            && mouseY >= verifyBtnY && mouseY < verifyBtnY + BTN_H) {
+                    int claimBtnY = splitRowY + BTN_H + PAD;
+                    int halfW     = (btnW - PAD) / 2;
+                    int locateX   = btnLeft;
+                    int verifyX   = btnLeft + halfW + PAD;
+
+                    if (mouseX >= locateX && mouseX < locateX + halfW
+                            && mouseY >= splitRowY && mouseY < splitRowY + BTN_H) {
+                        if (qr.targetCenterPos() != 0L) {
+                            PingRenderer.addPing(BlockPos.of(qr.targetCenterPos()));
+                        }
+                        return true;
+                    }
+                    if (mouseX >= verifyX && mouseX < verifyX + halfW
+                            && mouseY >= splitRowY && mouseY < splitRowY + BTN_H) {
                         NetworkHelper.sendVerifyClearancePacket.accept(anchorPos, qr.questId());
                         return true;
                     }

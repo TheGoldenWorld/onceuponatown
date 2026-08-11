@@ -5,6 +5,7 @@
   "icon_item": "minecraft:white_wool",
   "category": "jobs",
   "weight": 2,
+  "spawns_npc": "shepherd",
 
   "herd": 2,
   "consumption_per_herd": 1.0,

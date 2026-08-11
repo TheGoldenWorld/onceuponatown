@@ -11,13 +11,16 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.phys.Vec3;
+import java.util.List;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
-import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.level.pathfinder.PathFinder;
 import org.dawnoftime.onceuponatown.entity.ai.OuatWalkNodeEvaluator;
@@ -25,8 +28,10 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import org.dawnoftime.onceuponatown.entity.ai.shared.OpenFenceGateGoal;
+import org.dawnoftime.onceuponatown.entity.ai.shared.OpenWoodDoorGoal;
 import org.dawnoftime.onceuponatown.entity.ai.NpcJob;
 import org.dawnoftime.onceuponatown.entity.ai.NpcJobRegistry;
+import org.dawnoftime.onceuponatown.entity.ai.builder.BuilderJob;
 import org.dawnoftime.onceuponatown.town.LevelTowns;
 import org.dawnoftime.onceuponatown.town.Town;
 
@@ -87,7 +92,7 @@ public class Npc extends PathfinderMob {
 
     @Override
     protected void registerGoals() {
-        this.goalSelector.addGoal(1, new OpenDoorGoal(this, false));
+        this.goalSelector.addGoal(1, new OpenWoodDoorGoal(this));
         this.goalSelector.addGoal(2, new OpenFenceGateGoal(this));
         this.goalSelector.addGoal(10, new LookAtPlayerGoal(this, Player.class, 8.0f) {
             @Override public boolean canUse()         { return !suppressLookAtPlayer && super.canUse(); }
@@ -113,7 +118,21 @@ public class Npc extends PathfinderMob {
                 entityData.set(DATA_IS_READING, false);
                 setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
             }
+            List<ItemEntity> nearbyItems = level().getEntitiesOfClass(ItemEntity.class, getBoundingBox().inflate(1.5));
+            for (ItemEntity item : nearbyItems) {
+                Vec3 pull = position().subtract(item.position()).normalize().scale(0.15);
+                item.setDeltaMovement(item.getDeltaMovement().add(pull));
+                if (distanceTo(item) < 1.0f) item.discard();
+            }
         }
+    }
+
+    @Override
+    public void remove(Entity.RemovalReason reason) {
+        if (!level().isClientSide && job instanceof BuilderJob builderJob) {
+            builderJob.onRemoved();
+        }
+        super.remove(reason);
     }
 
     @Override
@@ -209,7 +228,6 @@ public class Npc extends PathfinderMob {
         setSleepingPos(pos);
         setPose(Pose.SLEEPING);
         setXRot(0.0F);
-        setYRot(0.0F);
         getNavigation().stop();
     }
 

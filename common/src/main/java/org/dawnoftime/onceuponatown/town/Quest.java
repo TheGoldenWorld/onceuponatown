@@ -72,7 +72,7 @@ public class Quest {
     // Zero for non-SITE_CLEARANCE quests.
     public long targetWorldPos = 0L;
     public final List<Condition> conditions = new ArrayList<>();
-    public Reward reward;
+    public final List<Reward> rewards = new ArrayList<>();
 
     public CompoundTag toNbt() {
         CompoundTag tag = new CompoundTag();
@@ -83,7 +83,9 @@ public class Quest {
         ListTag conds = new ListTag();
         for (Condition c : conditions) conds.add(c.toNbt());
         tag.put("Conditions", conds);
-        if (reward != null) tag.put("Reward", reward.toNbt());
+        ListTag rewardsList = new ListTag();
+        for (Reward r : rewards) rewardsList.add(r.toNbt());
+        tag.put("Rewards", rewardsList);
         return tag;
     }
 
@@ -94,7 +96,9 @@ public class Quest {
         q.questType = tag.contains("QuestType") ? tag.getString("QuestType") : "TASK";
         q.targetWorldPos = tag.contains("TargetWorldPos") ? tag.getLong("TargetWorldPos") : 0L;
         tag.getList("Conditions", Tag.TAG_COMPOUND).forEach(t -> q.conditions.add(Condition.fromNbt((CompoundTag) t)));
-        if (tag.contains("Reward")) q.reward = Reward.fromNbt(tag.getCompound("Reward"));
+        // Legacy: single "Reward" compound (saves from before multi-reward)
+        if (tag.contains("Reward") && !tag.contains("Rewards")) q.rewards.add(Reward.fromNbt(tag.getCompound("Reward")));
+        tag.getList("Rewards", Tag.TAG_COMPOUND).forEach(t -> q.rewards.add(Reward.fromNbt((CompoundTag) t)));
         return q;
     }
 }

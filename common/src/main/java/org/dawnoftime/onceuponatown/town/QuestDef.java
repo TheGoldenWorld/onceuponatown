@@ -8,7 +8,7 @@ public record QuestDef(
     String titleKey,
     String descKey,
     List<ConditionTemplate> conditions,
-    RewardTemplate reward,
+    List<RewardTemplate> rewards,
     long refreshIntervalTicks,
     Prerequisites prerequisites,
     String targetBuildingDefId    // defId of the building whose BB is scanned; null for non-clearance quests

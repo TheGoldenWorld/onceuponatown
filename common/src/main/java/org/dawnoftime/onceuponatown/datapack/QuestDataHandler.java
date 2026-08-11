@@ -64,14 +64,24 @@ public class QuestDataHandler {
             }
         }
 
-        QuestDef.RewardTemplate reward = null;
-        if (json.has("reward")) {
+        List<QuestDef.RewardTemplate> rewards = new ArrayList<>();
+        if (json.has("rewards")) {
+            for (JsonElement el : json.getAsJsonArray("rewards")) {
+                JsonObject r = el.getAsJsonObject();
+                rewards.add(new QuestDef.RewardTemplate(
+                    r.get("type").getAsString(),
+                    r.has("item") ? r.get("item").getAsString() : null,
+                    r.has("amount") ? r.get("amount").getAsInt() : 0
+                ));
+            }
+        } else if (json.has("reward")) {
+            // Legacy single-reward field
             JsonObject r = json.getAsJsonObject("reward");
-            reward = new QuestDef.RewardTemplate(
+            rewards.add(new QuestDef.RewardTemplate(
                 r.get("type").getAsString(),
                 r.has("item") ? r.get("item").getAsString() : null,
                 r.has("amount") ? r.get("amount").getAsInt() : 0
-            );
+            ));
         }
 
         QuestDef.Prerequisites prerequisites = QuestDef.Prerequisites.NONE;
@@ -82,7 +92,7 @@ public class QuestDataHandler {
         String targetBuildingDefId = json.has("target_building_def_id")
             ? json.get("target_building_def_id").getAsString() : null;
 
-        return new QuestDef(id, type, titleKey, descKey, conditions, reward, refreshIntervalTicks, prerequisites, targetBuildingDefId);
+        return new QuestDef(id, type, titleKey, descKey, conditions, rewards, refreshIntervalTicks, prerequisites, targetBuildingDefId);
     }
 
     private static QuestDef.Prerequisites parsePrerequisites(JsonObject json) {

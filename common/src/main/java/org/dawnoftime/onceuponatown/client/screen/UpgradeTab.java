@@ -1,5 +1,6 @@
 package org.dawnoftime.onceuponatown.client.screen;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -7,6 +8,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import org.dawnoftime.onceuponatown.Ouat;
 import org.dawnoftime.onceuponatown.client.ClientBuildingDefsRegistry;
 import org.dawnoftime.onceuponatown.network.NetworkHelper;
 
@@ -17,6 +19,9 @@ import java.util.Map;
 import static org.dawnoftime.onceuponatown.client.screen.TownHubTypes.*;
 
 class UpgradeTab {
+
+    private static final ResourceLocation ICONS_TEXTURE =
+        new ResourceLocation(Ouat.MOD_ID, "textures/gui/icons.png");
 
     private static final int PANEL_W           = 176;
     private static final int AVAIL_GRID_Y_ROW0 = 140;
@@ -65,7 +70,9 @@ class UpgradeTab {
                 boolean btnActive = !atMax && !pending && !isTownCenter && !eraLocked;
                 boolean btnHover = btnActive && mx >= btnX && mx < btnX + btnW && my >= btnY && my < btnY + btnH;
 
-                renderUpgradeGaugeBars(g, leftPos, topPos, sel, defEntry, btnHover, canAfford, ctx.font());
+                boolean showGhost    = btnHover || pending;
+                boolean ghostAfford = pending || canAfford;
+                renderUpgradeGaugeBars(g, leftPos, topPos, sel, defEntry, showGhost, ghostAfford, ctx.font());
 
                 if (!atMax && !pending) renderUnlockRow(g, leftPos, topPos, mx, my, sel, defEntry, ctx.buildingCatalog(), ctx.font());
 
@@ -272,7 +279,7 @@ class UpgradeTab {
         if (totalCadence > 0.001f) {
             float fill = curCadence / totalCadence;
             float ghost = showGhost ? ghostCadence / totalCadence : 0f;
-            g.drawString(font, "Speed", barX, gaugeY, 0xFFFF8800, false);
+            g.drawString(font, "Speed", barX, gaugeY, 0xFFFFFFFF, false);
             gaugeY += 13;
             renderStatBar(g, barX, gaugeY, barW, barH, fill, ghost, 0xFFFF8800, ghostColor);
             barLabelYs[numActiveBars] = gaugeY - 7;
@@ -283,7 +290,7 @@ class UpgradeTab {
         if (totalAmount > 0) {
             float fill = (float) curAmount / totalAmount;
             float ghost = showGhost ? (float) ghostAmount / totalAmount : 0f;
-            g.drawString(font, "Output", barX, gaugeY, 0xFFFFFF00, false);
+            g.drawString(font, "Output", barX, gaugeY, 0xFFFFFFFF, false);
             gaugeY += 13;
             renderStatBar(g, barX, gaugeY, barW, barH, fill, ghost, 0xFFFFFF00, ghostColor);
             barLabelYs[numActiveBars] = gaugeY - 7;
@@ -294,7 +301,7 @@ class UpgradeTab {
         if (totalCapacity > 0) {
             float fill = (float) curCapacity / totalCapacity;
             float ghost = showGhost ? (float) ghostCapacity / totalCapacity : 0f;
-            g.drawString(font, "Capacity", barX, gaugeY, 0xFF4488FF, false);
+            g.drawString(font, "Capacity", barX, gaugeY, 0xFFFFFFFF, false);
             gaugeY += 13;
             renderStatBar(g, barX, gaugeY, barW, barH, fill, ghost, 0xFF4488FF, ghostColor);
             barLabelYs[numActiveBars] = gaugeY - 7;
@@ -302,21 +309,10 @@ class UpgradeTab {
             numActiveBars++;
             gaugeY += barH + 6;
         }
-        if (totalResidents > 0) {
-            float fill = (float) curResidents / totalResidents;
-            float ghost = showGhost ? (float) ghostResidentsVal / totalResidents : 0f;
-            g.drawString(font, "Residents", barX, gaugeY, 0xFFAA7744, false);
-            gaugeY += 13;
-            renderStatBar(g, barX, gaugeY, barW, barH, fill, ghost, 0xFFAA7744, ghostColor);
-            barLabelYs[numActiveBars] = gaugeY - 7;
-            barTooltips[numActiveBars] = "+" + curResidents + " residents  (max +" + totalResidents + ")";
-            numActiveBars++;
-            gaugeY += barH + 6;
-        }
         if (totalFood > 0.001f) {
             float fill = curFood / totalFood;
             float ghost = showGhost ? ghostFood / totalFood : 0f;
-            g.drawString(font, "Food", barX, gaugeY, 0xFFCC3333, false);
+            g.drawString(font, "Food", barX, gaugeY, 0xFFFFFFFF, false);
             gaugeY += 13;
             renderStatBar(g, barX, gaugeY, barW, barH, fill, ghost, 0xFFCC3333, ghostColor);
             barLabelYs[numActiveBars] = gaugeY - 7;
@@ -327,7 +323,7 @@ class UpgradeTab {
         if (totalStock > 0.001) {
             float fill = (float)(curStock / totalStock);
             float ghost = showGhost ? (float)(ghostStock / totalStock) : 0f;
-            g.drawString(font, "Stock", barX, gaugeY, 0xFFFFCC00, false);
+            g.drawString(font, "Stock", barX, gaugeY, 0xFFFFFFFF, false);
             gaugeY += 13;
             renderStatBar(g, barX, gaugeY, barW, barH, fill, ghost, 0xFFFFCC00, ghostColor);
             barLabelYs[numActiveBars] = gaugeY - 7;
@@ -335,25 +331,34 @@ class UpgradeTab {
             numActiveBars++;
             gaugeY += barH + 6;
         }
-        if (totalHerd > 0) {
-            float fill = (float) curHerd / totalHerd;
-            float ghost = showGhost ? (float) ghostHerd / totalHerd : 0f;
-            g.drawString(font, "Herd", barX, gaugeY, 0xFF88BB44, false);
-            gaugeY += 13;
-            renderStatBar(g, barX, gaugeY, barW, barH, fill, ghost, 0xFF88BB44, ghostColor);
-            barLabelYs[numActiveBars] = gaugeY - 7;
-            barTooltips[numActiveBars] = "+" + curHerd + " animals  (max +" + totalHerd + ")";
-            numActiveBars++;
-            gaugeY += barH + 6;
-        }
         if (totalHerdFood > 0.001f) {
             float fill = curHerdFood / totalHerdFood;
             float ghost = showGhost ? ghostHerdFood / totalHerdFood : 0f;
-            g.drawString(font, "Herd Food", barX, gaugeY, 0xFFCC6633, false);
+            g.drawString(font, "Herd Food", barX, gaugeY, 0xFFFFFFFF, false);
             gaugeY += 13;
             renderStatBar(g, barX, gaugeY, barW, barH, fill, ghost, 0xFFCC6633, ghostColor);
             barLabelYs[numActiveBars] = gaugeY - 7;
             barTooltips[numActiveBars] = String.format("+%.2f food/animal  (max +%.2f)", curHerdFood, totalHerdFood);
+            numActiveBars++;
+            gaugeY += barH + 6;
+        }
+        if (totalResidents > 0) {
+            g.drawString(font, "Residents", barX, gaugeY, 0xFFFFFFFF, false);
+            gaugeY += 13;
+            renderIconSlotRow(g, barX, gaugeY, totalResidents, curResidents,
+                              showGhost ? ghostResidentsVal : 0, ghostColor, true);
+            barLabelYs[numActiveBars] = gaugeY - 7;
+            barTooltips[numActiveBars] = "+" + curResidents + " residents  (max +" + totalResidents + ")";
+            numActiveBars++;
+            gaugeY += 16 + 6;
+        }
+        if (totalHerd > 0) {
+            g.drawString(font, "Herd", barX, gaugeY, 0xFFFFFFFF, false);
+            gaugeY += 13;
+            renderIconSlotRow(g, barX, gaugeY, totalHerd, curHerd,
+                              showGhost ? ghostHerd : 0, ghostColor, false);
+            barLabelYs[numActiveBars] = gaugeY - 7;
+            barTooltips[numActiveBars] = "+" + curHerd + " animals  (max +" + totalHerd + ")";
             numActiveBars++;
         }
     }
@@ -453,6 +458,41 @@ class UpgradeTab {
             g.drawString(font, scrollText, leftPos + PANEL_W - 4 - font.width(scrollText),
                 topPos + 201, 0xFFAAAAAA, false);
         }
+    }
+
+    // Renders a row of 16x16 icons representing discrete slots.
+    // filled=texture icon, ghost=green silhouette preview, rest=black silhouette.
+    private static void renderIconSlotRow(GuiGraphics g, int x, int y,
+                                          int total, int filled, int ghost,
+                                          int ghostColor, boolean isPerson) {
+        int step = 16; // 16px icon, natural gap from texture transparency
+        for (int i = 0; i < total; i++) {
+            int ix = x + i * step;
+            if (i < filled) {
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
+                float v = isPerson ? 0f : 16f;
+                g.blit(ICONS_TEXTURE, ix, y, 16, 16, 48f, v, 16, 16, 64, 64);
+                RenderSystem.disableBlend();
+            } else if (i < filled + ghost) {
+                if (isPerson) drawPersonSilhouette(g, ix, y, ghostColor);
+                else          drawAnimalSilhouette(g, ix, y, ghostColor);
+            } else {
+                if (isPerson) drawPersonSilhouette(g, ix, y, 0xFF111111);
+                else          drawAnimalSilhouette(g, ix, y, 0xFF111111);
+            }
+        }
+    }
+
+    // 16x16 NPC head silhouette: pixel-perfect match of icons.png (48,0).
+    private static void drawPersonSilhouette(GuiGraphics g, int x, int y, int color) {
+        g.fill(x + 4, y + 3,  x + 12, y + 12, color); // main head block (8x9)
+        g.fill(x + 7, y + 12, x + 9,  y + 13, color); // chin detail (2px)
+    }
+
+    // 16x16 animal head silhouette: pixel-perfect match of icons.png (48,16).
+    private static void drawAnimalSilhouette(GuiGraphics g, int x, int y, int color) {
+        g.fill(x + 4, y + 4, x + 12, y + 12, color); // main head block (8x8)
     }
 
     private static void renderStatBar(GuiGraphics g, int x, int y, int w, int h,

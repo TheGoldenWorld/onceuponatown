@@ -18,9 +18,9 @@
     { "defId": "oven", "count": 1 }
   ],
 
-  "auto_build_sequence": [{"defId": "grove", "count": 2}, "oven", {"defId": "bee_tree", "count": 2}, "lumberjack"],
+  "auto_build_sequence": [{"defId": "grove", "count": 2}, "oven", {"defId": "wild_bee", "count": 2}, "lumberjack"],
 
-  "unlocked_building_ids": ["lone_place", "carpenter", "bee_field", "kitchen"],
+  "unlocked_building_ids": ["lone_place", "fisherman", "bee_field", "kitchen"],
   "unlock_npc_counts": { "builder": 1 },
   "auto_upgrade_ids": ["settlement_2"],
 

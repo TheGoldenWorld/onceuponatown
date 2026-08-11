@@ -1,0 +1,21 @@
+{
+  "from_era": 5,
+  "from_orientation": "excavator",
+  "orientation_label": "Excavator",
+  "structure_label": "Village",
+  "icon_item": "minecraft:blast_furnace",
+
+  "weight_cap_increase": 10,
+  "max_upgrade_level": 8,
+
+  "resource_cost": [
+    { "item": "minecraft:oak_log", "amount": 115 },
+    { "item": "minecraft:cobblestone", "amount": 90 }
+  ],
+
+  "required_residents": 10,
+
+  "auto_upgrade_ids": ["settlement"],
+
+  "next_orientation": "excavator"
+}

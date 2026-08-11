@@ -10,6 +10,7 @@
     { "item": "minecraft:cooked_porkchop", "fuv": 2 },
     { "item": "minecraft:baked_potato",    "fuv": 2 },
     { "item": "minecraft:bread",           "fuv": 2 }
+
   ],
 
   "herd_food": [

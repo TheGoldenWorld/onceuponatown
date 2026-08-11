@@ -33,16 +33,19 @@ import net.minecraftforge.server.ServerLifecycleHooks;
 import org.dawnoftime.onceuponatown.block.TownAnchorBlock;
 import org.dawnoftime.onceuponatown.blockentity.TownAnchorBlockEntity;
 import org.dawnoftime.onceuponatown.command.TownCommand;
+import org.dawnoftime.onceuponatown.datapack.BeekeeperConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuilderConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuildingDataHandler;
 import org.dawnoftime.onceuponatown.datapack.LumberjackConfigDataHandler;
+import org.dawnoftime.onceuponatown.datapack.MinerConfigDataHandler;
+import org.dawnoftime.onceuponatown.datapack.ShepherdConfigDataHandler;
 import org.dawnoftime.onceuponatown.datapack.BuildingListDataHandler;
 import org.dawnoftime.onceuponatown.datapack.EraTransitionDataHandler;
 import org.dawnoftime.onceuponatown.datapack.FoodListDataHandler;
 import org.dawnoftime.onceuponatown.datapack.QuestDataHandler;
 import org.dawnoftime.onceuponatown.datapack.TradePriceDataHandler;
 import org.dawnoftime.onceuponatown.entity.Npc;
-import org.dawnoftime.onceuponatown.network.C2SAdvanceEraPacket;
+
 import org.dawnoftime.onceuponatown.network.C2SSelectEraPathPacket;
 import org.dawnoftime.onceuponatown.network.C2SBuyPacket;
 import org.dawnoftime.onceuponatown.network.C2SDepositPacket;
@@ -205,18 +208,6 @@ public class OuatForge {
                 ctx.get().setPacketHandled(true);
             },
             Optional.of(NetworkDirection.PLAY_TO_CLIENT)
-        );
-
-        CHANNEL.registerMessage(6,
-            C2SAdvanceEraPacket.class,
-            C2SAdvanceEraPacket::encode,
-            C2SAdvanceEraPacket::decode,
-            (msg, ctx) -> {
-                ctx.get().enqueueWork(() ->
-                    C2SAdvanceEraPacket.Handler.handle(msg, ctx.get().getSender()));
-                ctx.get().setPacketHandled(true);
-            },
-            Optional.of(NetworkDirection.PLAY_TO_SERVER)
         );
 
         CHANNEL.registerMessage(7,
@@ -431,8 +422,11 @@ public class OuatForge {
     }
 
     private void onServerStarting(ServerStartingEvent event) {
+        BeekeeperConfigDataHandler.reload(event.getServer());
         BuilderConfigDataHandler.reload(event.getServer());
         LumberjackConfigDataHandler.reload(event.getServer());
+        MinerConfigDataHandler.reload(event.getServer());
+        ShepherdConfigDataHandler.reload(event.getServer());
         BuildingDataHandler.reload(event.getServer());
         BuildingListDataHandler.reload(event.getServer());
         EraTransitionDataHandler.reload(event.getServer());

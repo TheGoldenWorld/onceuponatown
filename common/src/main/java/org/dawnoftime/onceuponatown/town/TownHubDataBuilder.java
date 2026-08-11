@@ -94,7 +94,7 @@ public class TownHubDataBuilder {
             catalogTag.add(buildCatalogEntry(def, nextEraIds));
         }
         hub.put("BuildingCatalog", catalogTag);
-        hub.put("StockSnapshot", buildStockSnapshotTag(inv));
+        hub.put("StockSnapshot", buildFullStockTag(inv));
         hub.put("TradePrices", TradePriceDataHandler.buildPricesTag());
         hub.put("UpgradeBuildings", buildUpgradeBuildingsTag());
 
@@ -125,7 +125,12 @@ public class TownHubDataBuilder {
     public CompoundTag buildStockUpdateData(BlockPos anchorPos) {
         CompoundTag tag = new CompoundTag();
         tag.put("AnchorPos", NbtUtils.writeBlockPos(anchorPos));
-        TownInventory inv = town.getTownInventory();
+        tag.put("StockSnapshot", buildFullStockTag(town.getTownInventory()));
+        return tag;
+    }
+
+    // Full stock: produced items first, then cost items not already covered.
+    private CompoundTag buildFullStockTag(TownInventory inv) {
         CompoundTag stockTag = new CompoundTag();
         Set<Item> produced = new LinkedHashSet<>();
         for (PlacedBuilding b : town.getBuildings()) {
@@ -148,8 +153,7 @@ public class TownHubDataBuilder {
             .filter(item -> !produced.contains(item))
             .forEach(item -> stockTag.putInt(
                 BuiltInRegistries.ITEM.getKey(item).toString(), inv.getStock(item)));
-        tag.put("StockSnapshot", stockTag);
-        return tag;
+        return stockTag;
     }
 
     // Map + queue + upgrade list (sent after construction changes).
@@ -360,6 +364,16 @@ public class TownHubDataBuilder {
             costTag.add(ct);
         }
         dt.put("ConstructionCost", costTag);
+        if (!def.playerCost.isEmpty()) {
+            ListTag playerCostTag = new ListTag();
+            for (ItemCost ic : def.playerCost) {
+                CompoundTag ct = new CompoundTag();
+                ct.putString("Item", BuiltInRegistries.ITEM.getKey(ic.item()).toString());
+                ct.putInt("Amount", ic.amount());
+                playerCostTag.add(ct);
+            }
+            dt.put("PlayerCost", playerCostTag);
+        }
         int catalogLevel = town.getBuildings().stream()
             .filter(b -> b.defId.equals(def.id))
             .mapToInt(PlacedBuilding::getUpgradeLevel)
@@ -430,21 +444,6 @@ public class TownHubDataBuilder {
         return dt;
     }
 
-    private CompoundTag buildStockSnapshotTag(TownInventory inv) {
-        CompoundTag stockTag = new CompoundTag();
-        Stream.concat(
-            BuildingDataHandler.getAll().stream()
-                .flatMap(def -> Stream.concat(
-                    def.constructionCost.stream().map(ItemCost::item),
-                    def.upgrades.stream().flatMap(u -> u.upgradeCost().stream().map(ItemCost::item))
-                )),
-            EraTransitionDataHandler.getAll().stream()
-                .flatMap(t -> t.resourceCost.stream().map(ItemCost::item))
-        ).distinct()
-            .forEach(item -> stockTag.putInt(
-                BuiltInRegistries.ITEM.getKey(item).toString(), inv.getStock(item)));
-        return stockTag;
-    }
 
     private ListTag buildUpgradeBuildingsTag() {
         List<PlacedBuilding> upgradeBuildings = town.getBuildings().stream()
@@ -502,12 +501,27 @@ public class TownHubDataBuilder {
                 condsTag.add(ct);
             }
             qt.put("Conditions", condsTag);
-            if (q.reward != null) {
-                CompoundTag rt = new CompoundTag();
-                rt.putString("Type", q.reward.type);
-                if (q.reward.item != null) rt.putString("Item", BuiltInRegistries.ITEM.getKey(q.reward.item).toString());
-                rt.putInt("Amount", q.reward.amount);
-                qt.put("Reward", rt);
+            if (q.targetWorldPos != 0L) {
+                town.getBuildings().stream()
+                    .filter(b -> b.worldPos.asLong() == q.targetWorldPos)
+                    .findFirst()
+                    .ifPresent(b -> {
+                        BlockPos center = b.bb != null
+                            ? new BlockPos((b.bb.minX() + b.bb.maxX()) / 2, b.bb.minY(), (b.bb.minZ() + b.bb.maxZ()) / 2)
+                            : b.worldPos;
+                        qt.putLong("TargetCenterPos", center.asLong());
+                    });
+            }
+            if (!q.rewards.isEmpty()) {
+                ListTag rewardsList = new ListTag();
+                for (Quest.Reward rw : q.rewards) {
+                    CompoundTag rt = new CompoundTag();
+                    rt.putString("Type", rw.type);
+                    if (rw.item != null) rt.putString("Item", BuiltInRegistries.ITEM.getKey(rw.item).toString());
+                    rt.putInt("Amount", rw.amount);
+                    rewardsList.add(rt);
+                }
+                qt.put("Rewards", rewardsList);
             }
             questsTag.add(qt);
         }
